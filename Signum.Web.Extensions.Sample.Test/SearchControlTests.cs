@@ -63,6 +63,7 @@ namespace Signum.Web.Extensions.Sample.Test
 
             //Filter from the combo with Subtokens
             selenium.FilterSelectToken(0, "label=Label", true);
+            selenium.ExpandTokens(1);
             selenium.FilterSelectToken(1, "label=Name", false);
             selenium.AddFilter(1);
             selenium.Type("value_1", "virgin");
@@ -81,7 +82,9 @@ namespace Signum.Web.Extensions.Sample.Test
 
             //Filter from the combo with subtokens of a MList
             selenium.FilterSelectToken(0, "label=Album", true);
+            selenium.ExpandTokens(1);
             selenium.FilterSelectToken(1, "label=Songs", true);
+            selenium.ExpandTokens(2);
             selenium.FilterSelectToken(2, "value=Count", false);
             selenium.AddFilter(2);
             selenium.FilterSelectOperation(2, "value=GreaterThan");
@@ -111,7 +114,7 @@ namespace Signum.Web.Extensions.Sample.Test
             selenium.Search();
             selenium.WaitAjaxFinished(selenium.ThereAreNRows(5));
             Assert.IsTrue(selenium.IsElementPresent("jq=.sf-pagination-left:contains('5')"));
-            selenium.SetElementsPerPageToFinder("-1"); 
+            selenium.SetElementsPerPageToFinder(""); 
             selenium.Search();
             selenium.WaitAjaxFinished(selenium.ThereAreNRows(12));
             Assert.IsTrue(selenium.IsElementPresent("jq=.sf-pagination-left:contains('12')"));
@@ -160,6 +163,7 @@ namespace Signum.Web.Extensions.Sample.Test
 
             //Filter from the combo with Subtokens
             selenium.FilterSelectToken(0, "label=Artist", true, prefix);
+            selenium.ExpandTokens(1, prefix);
             selenium.FilterSelectToken(1, "label=Name", false, prefix);
             selenium.AddFilter(2, prefix);
             selenium.FilterSelectOperation(2, "value=EndsWith", prefix);
@@ -186,7 +190,7 @@ namespace Signum.Web.Extensions.Sample.Test
             selenium.SetElementsPerPageToFinder("5", prefix);
             selenium.Search(prefix);
             selenium.WaitAjaxFinished(selenium.ThereAreNRows(5, prefix));
-            selenium.SetElementsPerPageToFinder("-1", prefix); 
+            selenium.SetElementsPerPageToFinder("", prefix); 
             selenium.Search(prefix);
             selenium.WaitAjaxFinished(selenium.ThereAreNRows(8, prefix));
         }
@@ -277,6 +281,7 @@ namespace Signum.Web.Extensions.Sample.Test
 
             //Add 2 user columns
             selenium.FilterSelectToken(0, "label=Label", true);
+            selenium.ExpandTokens(1);
             selenium.FilterSelectToken(1, "label=Id", false);
             selenium.AddColumn("Label.Id");
 
@@ -291,6 +296,8 @@ namespace Signum.Web.Extensions.Sample.Test
             selenium.WaitAjaxFinished(() => selenium.IsElementPresent(SearchTestExtensions.CellSelector(selenium, 1, 8)));
 
             //Move columns
+            Assert.IsFalse(selenium.CanMoveColumn(1, true));
+            Assert.IsFalse(selenium.CanMoveColumn(8, false));
             selenium.MoveColumn(7, "Label Id", true);
             selenium.MoveColumn(6, "Label Id", false);
 
@@ -313,12 +320,14 @@ namespace Signum.Web.Extensions.Sample.Test
             string prefix = "Members_0_"; //prefix for all the popup
 
             //User columns are not present in popup
-            Assert.IsFalse(selenium.IsElementPresent("jq=#{0}sfSearchControl .sf-add-column".Formato(prefix)));
+            Assert.IsFalse(selenium.IsElementPresent("jq=#{0}divSearchControl .sf-add-column".Formato(prefix)));
 
             //Edit names
             selenium.EditColumnName(5, "Male", prefix);
 
             //Move columns
+            Assert.IsFalse(selenium.CanMoveColumn(3, true, prefix));
+            Assert.IsFalse(selenium.CanMoveColumn(8, false, prefix));
             selenium.MoveColumn(3, "Id", false, prefix);
             selenium.MoveColumn(4, "Id", true, prefix);
 
@@ -349,8 +358,10 @@ namespace Signum.Web.Extensions.Sample.Test
             selenium.WaitAjaxFinished(selenium.ThereAreNRows(2)); //Entity with id 1 of each type
 
             selenium.DeleteFilter(0);
-            selenium.FilterSelectToken(0, "value=Entity", true);
-            selenium.FilterSelectToken(1, "value=(Artist)", true);
+            selenium.FilterSelectToken(0, "label=IAuthor", true);
+            selenium.ExpandTokens(1);
+            selenium.FilterSelectToken(1, "value=({0})".Formato(typeof(ArtistDN).FullName.Replace(".", ":")), true);
+            selenium.ExpandTokens(2);
             selenium.FilterSelectToken(2, "Id", false);
             selenium.AddFilter(0);
             selenium.Type("value_0", "1"); 
@@ -359,7 +370,7 @@ namespace Signum.Web.Extensions.Sample.Test
 
             //Create implemented type
             selenium.SearchCreateWithImpl("Artist");
-            selenium.WaitAjaxFinished(() => selenium.IsElementPresent("jq=#Dead")); //there's an artist valueline
+            Assert.IsTrue(selenium.IsElementPresent("jq=#Dead")); //there's an artist valueline
         }
 
         [TestMethod]
@@ -376,11 +387,13 @@ namespace Signum.Web.Extensions.Sample.Test
             selenium.FilterSelectToken(0, "label=Artist", true);
             selenium.CheckAddFilterEnabled(true);
             selenium.CheckAddColumnEnabled(true);
+            selenium.ExpandTokens(1);
             selenium.CheckAddFilterEnabled(true);
             selenium.CheckAddColumnEnabled(true);
             selenium.FilterSelectToken(1, "label=Friends", true);
             selenium.CheckAddFilterEnabled(false);
             selenium.CheckAddColumnEnabled(false);
+            selenium.ExpandTokens(2);
             selenium.FilterSelectToken(2, "value=Count", false);
             selenium.CheckAddFilterEnabled(true);
             selenium.CheckAddColumnEnabled(true);
@@ -433,6 +446,7 @@ namespace Signum.Web.Extensions.Sample.Test
             selenium.AssertMultiplyMessage(false);
             selenium.WaitAjaxFinished(selenium.ThereAreNRows(3));
 
+            selenium.ExpandTokens(3);
             selenium.FilterSelectToken(3, "value=Name", false);
             selenium.AddFilter(1);
             selenium.Type("value_1", "i");
@@ -459,6 +473,7 @@ namespace Signum.Web.Extensions.Sample.Test
             selenium.AssertMultiplyMessage(false);
             selenium.WaitAjaxFinished(selenium.ThereAreNRows(5));
 
+            selenium.ExpandTokens(3);
             selenium.FilterSelectToken(3, "value=Name", false);
             selenium.AddFilter(1);
             selenium.Type("value_1", "Corgan");

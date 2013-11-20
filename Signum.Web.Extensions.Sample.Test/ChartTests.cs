@@ -82,6 +82,7 @@ namespace Signum.Web.Extensions.Sample.Test
 
             //check aggregate filter present with dot dot, but do not add
             selenium.FilterSelectToken(0, "value=Id", true);
+            selenium.ExpandTokens(1);
             selenium.FilterSelectToken(1, "value=Average", false);
 
             Draw();

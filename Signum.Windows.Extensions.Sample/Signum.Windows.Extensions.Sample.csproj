@@ -14,14 +14,10 @@
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{60dc8134-eba5-43b8-bcc9-bb4bc16c2548};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <WarningLevel>4</WarningLevel>
-    <SccProjectName>
-    </SccProjectName>
-    <SccLocalPath>
-    </SccLocalPath>
-    <SccAuxPath>
-    </SccAuxPath>
-    <SccProvider>
-    </SccProvider>
+    <SccProjectName>SAK</SccProjectName>
+    <SccLocalPath>SAK</SccLocalPath>
+    <SccAuxPath>SAK</SccAuxPath>
+    <SccProvider>SAK</SccProvider>
     <FileUpgradeFlags>
     </FileUpgradeFlags>
     <OldToolsVersion>4.0</OldToolsVersion>
@@ -163,6 +159,10 @@
     <ProjectReference Include="..\Signum.Windows.Extensions\Signum.Windows.Extensions.csproj">
       <Project>{CAFD6D4D-E5FB-4A6E-84FC-3185854CCD9D}</Project>
       <Name>Signum.Windows.Extensions</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Signum.Windows.Visifire\Signum.Windows.Visifire.csproj">
+      <Project>{FCC8FE70-1452-4860-9062-8F570B59DCA3}</Project>
+      <Name>Signum.Windows.Visifire</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>

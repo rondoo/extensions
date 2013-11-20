@@ -95,10 +95,10 @@ namespace Signum.Windows.Extensions.Sample
             //SchedulerClient.Start();
 
             LinksWidget.Start();
-            ReportClient.Start(true, false);
+            ReportClient.Start(false, false);
 
             Links.RegisterGlobalLinks((r, c) => new[]{
-                new QuickLinkExplore(new ExploreOptions(typeof(OperationLogDN))
+                new QuickLinkExplore(new ExploreOptions(typeof(OperationLogDN) )
                 {
                     FilterOptions = { new FilterOption("Target", r) },
                     OrderOptions = { new OrderOption("Start") },
@@ -108,7 +108,7 @@ namespace Signum.Windows.Extensions.Sample
             });
 
             UserQueryClient.Start();
-            ChartClient.Start();
+            ChartClient.Start(() => new ChartRendererVisifire());
 
             Navigator.AddSettings(new List<EntitySettings>()
             {

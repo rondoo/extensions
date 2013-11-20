@@ -13,14 +13,10 @@
     <RootNamespace>Signum.Web.Extensions</RootNamespace>
     <AssemblyName>Signum.Web.Extensions</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
-    <SccProjectName>
-    </SccProjectName>
-    <SccLocalPath>
-    </SccLocalPath>
-    <SccAuxPath>
-    </SccAuxPath>
-    <SccProvider>
-    </SccProvider>
+    <SccProjectName>%24/CIQS.root/Development/Sprint 19/Extensions/Signum.Web.Extensions</SccProjectName>
+    <SccLocalPath>.</SccLocalPath>
+    <SccAuxPath>http://tfs2010-dhd:8080/tfs/paleiskade</SccAuxPath>
+    <SccProvider>{4CA58AB2-18FA-4F8D-95D4-32DDF27D184C}</SccProvider>
     <FileUpgradeFlags>
     </FileUpgradeFlags>
     <OldToolsVersion>4.0</OldToolsVersion>
@@ -344,16 +340,6 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>PanelPartView.cshtml</DependentUpon>
     </Compile>
-    <Compile Include="ControlPanel\Views\Admin\SearchControlPart.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>SearchControlPart.cshtml</DependentUpon>
-    </Compile>
-    <Compile Include="ControlPanel\Views\Admin\UserChartPart1.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>UserChartPart.cshtml</DependentUpon>
-    </Compile>
     <Compile Include="ControlPanel\Views\ControlPanel.generated.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
@@ -563,16 +549,6 @@
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
       <DependentUpon>CountUserQueryElement.cshtml</DependentUpon>
-    </Compile>
-    <Compile Include="ControlPanel\Views\Admin\LinkElement.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>LinkElement.cshtml</DependentUpon>
-    </Compile>
-    <Compile Include="ControlPanel\Views\Admin\LinkListPart.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>LinkListPart.cshtml</DependentUpon>
     </Compile>
     <Compile Include="Files\FileRepeaterHelper.cs" />
     <Compile Include="Files\FileRepeater.cs" />

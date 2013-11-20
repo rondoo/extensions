@@ -16,6 +16,7 @@ namespace Signum.Engine.Disconnected
         {
             var csb = new SqlConnectionStringBuilder(connectionString);
 
+            DisconnectedTools.CreateDatabaseDirectory(databaseFile);
             string databaseName = csb.InitialCatalog;
 
             csb.InitialCatalog = "";

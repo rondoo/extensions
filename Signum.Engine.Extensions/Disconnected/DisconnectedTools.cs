@@ -9,6 +9,7 @@ using System.Data;
 using System.Data.SqlClient;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.IO;
 
 namespace Signum.Engine.Disconnected
 {
@@ -41,6 +42,21 @@ LOG ON
     ( NAME = N'{0}_Log', FILENAME =  N'{2}' , SIZE = 2048KB , MAXSIZE = 2048GB , FILEGROWTH = 16384KB )".Formato(databaseName, databaseFile, databaseLogFile);
 
             Executor.ExecuteNonQuery(script);
+        }
+
+        public static void CreateDatabaseDirectory(string databaseFile)
+        {
+            if (databaseFile != string.Empty)
+            {
+                string databaseDirectory = Path.GetDirectoryName(databaseFile);
+                if (databaseDirectory != string.Empty)
+                {
+                    if (!Directory.Exists(databaseDirectory))
+                    {
+                        Directory.CreateDirectory(databaseDirectory);
+                    }
+                } 
+            }
         }
 
         public static void BackupDatabase(string databaseName, string backupFile)

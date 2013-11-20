@@ -1,22 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
-using Signum.Entities.Disconnected;
-using Signum.Entities;
-using Signum.Utilities;
-using Signum.Entities.Authorization;
-using System.Windows.Threading;
 using System.IO;
-using System.IO.Compression;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Threading;
+using Signum.Entities;
+using Signum.Entities.Authorization;
+using Signum.Entities.Disconnected;
+using Signum.Utilities;
+using System.Diagnostics;
 
 namespace Signum.Windows.Disconnected
 {
@@ -25,13 +16,18 @@ namespace Signum.Windows.Disconnected
     /// </summary>
     public partial class DownloadProgress : Window
     {
-        public DownloadProgress()
+        private string downloadFilePath;
+
+        public DownloadProgress(): this(string.Empty) { }
+        public DownloadProgress(string DownloadFilePath)
         {
             InitializeComponent();
 
             this.Loaded += new RoutedEventHandler(DownloadDatabase_Loaded);
 
             var a = DisconnectedMachineDN.Current;
+
+            downloadFilePath = DownloadFilePath;
         }
 
         DisconnectedExportDN estimation;
@@ -101,20 +97,31 @@ namespace Signum.Windows.Disconnected
                 DownloadStatistics = currentLite
             });
 
+            string filePath = Path.Combine(downloadFilePath, DisconnectedClient.DownloadBackupFile);
+            FileTools.CreateDirectory(filePath);
+
             pbDownloading.Minimum = 0;
             pbDownloading.Maximum = file.Length;
 
-            using (var ps = new ProgressStream(file.Stream))
+            Task.Factory.StartNew(() =>
             {
-                ps.ProgressChanged += (s, args) => pbDownloading.Value = ps.Position;
+                using (var ps = new ProgressStream(file.Stream))
+                {
+                    if (!Debugger.IsAttached)
+                    ps.ProgressChanged += (s, args) =>
+                        Dispatcher.BeginInvoke(() => pbDownloading.Value = ps.Position);
 
-                using (FileStream fs = File.OpenWrite(DisconnectedClient.DownloadBackupFile))
-                    ps.CopyTo(fs);
-            }
+                    using (FileStream fs = File.OpenWrite(filePath))
+                        ps.CopyTo(fs);
+                }
 
-            MessageBox.Show(Window.GetWindow(this), "You have successfully downloaded a local database. \r\nThe application will turn off now.\r\nNext time you start it up, choose LocalDB.", "Download complete", MessageBoxButton.OK);
+                Dispatcher.Invoke(() =>
+                {
+                    MessageBox.Show(Window.GetWindow(this), "You have successfully downloaded a local database. \r\nThe application will turn off now.\r\nNext time you start it up, choose Run Disconnected.", "Download complete", MessageBoxButton.OK);
+                });
 
-            Environment.Exit(0);
+                Environment.Exit(0);
+            });
         }
     }
 }

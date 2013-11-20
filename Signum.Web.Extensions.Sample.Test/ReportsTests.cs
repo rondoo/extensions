@@ -15,6 +15,7 @@ using Signum.Engine.Authorization;
 using System.Text.RegularExpressions;
 using Signum.Utilities;
 using System.Resources;
+using Signum.Web.Operations;
 
 namespace Signum.Web.Extensions.Sample.Test
 {
@@ -58,7 +59,7 @@ namespace Signum.Web.Extensions.Sample.Test
             selenium.WaitForPageToLoad(PageLoadTimeout);
 
             selenium.Type("DisplayName", "test");
-            selenium.Type("File_sfFile", pathSampleReport);
+            selenium.Type("File", pathSampleReport);
             selenium.EntityButtonClick(saveReportId);
             selenium.WaitForPageToLoad(SeleniumExtensions.PageLoadLongTimeout);
             selenium.MainEntityHasId();
@@ -94,7 +95,7 @@ namespace Signum.Web.Extensions.Sample.Test
             selenium.SearchCreate();
             selenium.WaitForPageToLoad(PageLoadTimeout);
             selenium.Type("DisplayName", "test 3");
-            selenium.Type("File_sfFile", pathSampleReport);
+            selenium.Type("File", pathSampleReport);
             selenium.EntityButtonClick(saveReportId);
             selenium.WaitForPageToLoad(PageLoadTimeout);
 

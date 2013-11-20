@@ -7,7 +7,6 @@ using Selenium;
 using System.Diagnostics;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Signum.Utilities;
-using System.Linq.Expressions;
 
 namespace Signum.Web.Selenium
 {
@@ -127,30 +126,23 @@ namespace Signum.Web.Selenium
         //public const int DefaultAjaxTimeout = 10000;
         public const int DefaultAjaxTimeout = 15000;
 
-        public static void WaitAjaxFinished(this ISelenium selenium, Expression<Func<bool>> condition)
+        public static void WaitAjaxFinished(this ISelenium selenium, Func<bool> condition)
         {
             WaitAjaxFinished(selenium, condition, DefaultAjaxTimeout);
         }
 
-        public static void WaitAjaxFinished(this ISelenium selenium, Expression<Func<bool>> condition, int? timeout = null)
+        public static void WaitAjaxFinished(this ISelenium selenium, Func<bool> condition, int timeout)
         {
-            var func = condition.Compile();
-
-            DateTime limit = DateTime.Now.AddMilliseconds(timeout ?? DefaultAjaxTimeout);
-
-            if (func())
-                return;
-
-            do
+            DateTime limit = DateTime.Now.AddMilliseconds(timeout);
+            Debug.WriteLine(timeout);
+            Debug.WriteLine(condition());
+            while (DateTime.Now < limit && !condition())
             {
+                Debug.WriteLine(DateTime.Now < limit);
+                Debug.WriteLine(condition());
                 Thread.Sleep(500);
-
-                if (func())
-                    return;
-
-            } while (DateTime.Now < limit);
-
-            throw new TimeoutException("The expression took more than {0} ms:\r\n{1}".Formato(timeout ?? DefaultAjaxTimeout, condition.NiceToString()));
+            }
+            Assert.IsTrue(condition());
         }
 
         public static string PopupSelector(string prefix)
@@ -202,7 +194,7 @@ namespace Signum.Web.Selenium
         public static string EntityMenuOptionLocator(string menuId, string optionId)
         {
             //check of menu and item classes is redundant but it must be in the html, so good for testing
-            return "jq=#{0}.sf-dropdown ul.sf-menu-button li.ui-menu-item a.sf-entity-button#{1}".Formato(menuId, optionId);
+            return "jq=#{0}.sf-entity-button.sf-dropdown ul.sf-menu-button li.ui-menu-item a.sf-entity-button#{1}".Formato(menuId, optionId);
         }
 
         public static void EntityButtonSaveClick(this ISelenium selenium)
@@ -222,7 +214,9 @@ namespace Signum.Web.Selenium
 
         public static bool EntityButtonEnabled(this ISelenium selenium, string idButton)
         {
-            return selenium.IsElementPresent("{0}:not(.sf-disabled)".Formato(EntityButtonLocator(idButton)));
+            string locator = EntityButtonLocator(idButton);
+            return selenium.IsElementPresent(locator) && 
+                  !selenium.IsElementPresent("{0}.sf-disabled".Formato(locator));
         }
 
         public static void EntityOperationClick(this ISelenium selenium, Enum operationKey)
@@ -232,7 +226,7 @@ namespace Signum.Web.Selenium
 
         public static void EntityButtonClick(this ISelenium selenium, string idButton)
         {
-            selenium.Click("{0}:not(.sf-disabled)".Formato(EntityButtonLocator(idButton)));
+            selenium.Click(EntityButtonLocator(idButton));
         }
 
         public static void EntityMenuConstructFromClick(this ISelenium selenium, Enum constructFromKey)

@@ -12,14 +12,10 @@
     <AssemblyName>Signum.Entities.Extensions</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
-    <SccProjectName>
-    </SccProjectName>
-    <SccLocalPath>
-    </SccLocalPath>
-    <SccAuxPath>
-    </SccAuxPath>
-    <SccProvider>
-    </SccProvider>
+    <SccProjectName>%24/CIQS.root/Development/Sprint 19/Extensions/Signum.Entities.Extensions</SccProjectName>
+    <SccLocalPath>.</SccLocalPath>
+    <SccAuxPath>http://tfs2010-dhd:8080/tfs/paleiskade</SccAuxPath>
+    <SccProvider>{4CA58AB2-18FA-4F8D-95D4-32DDF27D184C}</SccProvider>
     <FileUpgradeFlags>
     </FileUpgradeFlags>
     <OldToolsVersion>4.0</OldToolsVersion>
@@ -64,6 +60,17 @@
     <OutputPath>bin\Partial\</OutputPath>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'StagingWindows|AnyCPU'">
+    <DebugSymbols>true</DebugSymbols>
+    <OutputPath>bin\StagingWindows\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DebugType>full</DebugType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <ErrorReport>prompt</ErrorReport>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisIgnoreBuiltInRuleSets>false</CodeAnalysisIgnoreBuiltInRuleSets>
+    <CodeAnalysisIgnoreBuiltInRules>false</CodeAnalysisIgnoreBuiltInRules>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core">
@@ -103,17 +110,25 @@
     <Compile Include="Cache\CachePermissions.cs" />
     <Compile Include="Chart\AggregateToken.cs" />
     <Compile Include="Chart\ChartColor.cs" />
+    <Compile Include="Chart\ChartColumn.cs">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Chart\ChartOmniboxResultGenerator.cs">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Chart\ChartPermissions.cs" />
-    <Compile Include="Chart\ChartScript.cs" />
-    <Compile Include="Chart\ChartColumn.cs" />
     <Compile Include="Chart\ChartRequest.cs" />
-    <Compile Include="Chart\ChartScriptParameter.cs" />
+    <Compile Include="Chart\ChartScript.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Chart\ChartScriptParameter.cs">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Chart\ChartUtils.cs" />
     <Compile Include="Chart\IChartServer.cs" />
-    <Compile Include="Chart\UserChart.cs" />
+    <Compile Include="Chart\UserChart.cs">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="ControlPanel\ControlPanelDN.cs" />
     <Compile Include="ControlPanel\PanelPart.cs" />
     <Compile Include="Disconnected\DisconnectedExportRanges.cs" />

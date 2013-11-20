@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Resources;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -9,7 +9,7 @@ using System.Windows;
 // associated with an assembly.
 [assembly: AssemblyTitle("Signum.Windows.Extensions.Sample")]
 [assembly: AssemblyDescription("")]
-[assembly: AssemblyConfiguration("")]
+[assembly: AssemblyConfiguration("Debug")]
 [assembly: AssemblyCompany("Microsoft")]
 [assembly: AssemblyProduct("Signum.Windows.Extensions.Sample")]
 [assembly: AssemblyCopyright("Copyright © Microsoft 2010")]
@@ -51,5 +51,5 @@ using System.Windows;
 // You can specify all the values or you can default the Build and Revision Numbers 
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("0.10.6.1411")]
+[assembly: AssemblyFileVersion("0.10.6.1411")]

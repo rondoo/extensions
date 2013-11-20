@@ -68,8 +68,8 @@ namespace Signum.Windows.Disconnected
 
                     current = Server.Return((IDisconnectedServer s) => s.GetDisconnectedMachine(Environment.MachineName));
 
-                    if (current == null)
-                        throw new ApplicationException("No {0} found for '{1}'".Formato(typeof(DisconnectedMachineDN).NiceName(), Environment.MachineName));
+                    //if (current == null)
+                    //    throw new ApplicationException("No {0} found for '{1}'".Formato(typeof(DisconnectedMachineDN).NiceName(), Environment.MachineName));
 
                     return current;
                 };

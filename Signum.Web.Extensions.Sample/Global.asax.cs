@@ -26,7 +26,6 @@ using Signum.Web.PortableAreas;
 using Signum.Web.Widgets;
 using Signum.Web.Chart;
 using Signum.Utilities;
-using Signum.Web.Files;
 
 namespace Signum.Web.Extensions.Sample
 {
@@ -107,9 +106,9 @@ namespace Signum.Web.Extensions.Sample
             UserQueriesClient.Start();
             ControlPanelClient.Start();
 
-            FilesClient.Start(true, true, true);
-            ChartClient.Start();
             ReportsClient.Start(true, true);
+
+            ChartClient.Start();
 
             QuickLinkWidgetHelper.Start();
             NotesClient.Start();

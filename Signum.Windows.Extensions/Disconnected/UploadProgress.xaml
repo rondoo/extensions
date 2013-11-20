@@ -12,7 +12,7 @@
         <GroupBox Header="Uploading">
             <ProgressBar Height="20" x:Name="pbUploading"/>
         </GroupBox>
-        <GroupBox Header="Generating">
+        <GroupBox Header="Processing">
             <StackPanel>
                 <ProgressBar Height="20" x:Name="pbImporting" />
                 <Expander Header="Details" x:Name="expander">

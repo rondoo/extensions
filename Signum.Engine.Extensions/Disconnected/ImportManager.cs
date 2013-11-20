@@ -112,7 +112,7 @@ namespace Signum.Engine.Disconnected
                 lock(SyncLock)
                 using(AuthLogic.UserSession(user))
                 {
-                    OnStartImporting(machine);
+                        OnStartImporting(machine);
 
                     DisconnectedMachineDN.Current = machine.ToLite();
 
@@ -194,9 +194,12 @@ namespace Signum.Engine.Disconnected
 
                         import.InDB().UnsafeUpdate(s => new DisconnectedImportDN { State = DisconnectedImportState.Completed, Total = s.CalculateTotal() });
 
-                        machine.InDB().UnsafeUpdate(m => new DisconnectedMachineDN { State = 
+                        machine.InDB().UnsafeUpdate(m => new DisconnectedMachineDN 
+                        { 
+                            State = 
                             file == null ? DisconnectedMachineState.Fixed : 
-                                           DisconnectedMachineState.Connected });
+                                           DisconnectedMachineState.Connected 
+                                           });
                     }
                     catch (Exception e)
                     {
@@ -279,10 +282,14 @@ namespace Signum.Engine.Disconnected
         {
             string backupFileName = Path.Combine(DisconnectedLogic.BackupFolder, BackupFileName(machine, import));
 
-            DisconnectedTools.RestoreDatabase(DatabaseName(machine),
-                backupFileName,
-                DatabaseFileName(machine),
-                DatabaseLogFileName(machine));
+            string fileName = DatabaseFileName(machine);
+            string logFileName = DatabaseLogFileName(machine);
+
+            //2013-08-07
+            //DisconnectedTools.CreateDatabaseDirectory(fileName);
+            //DisconnectedTools.CreateDatabaseDirectory(logFileName);
+
+            DisconnectedTools.RestoreDatabase(DatabaseName(machine), backupFileName, fileName, logFileName);
         }
 
         private string GetImportConnectionString(DisconnectedMachineDN machine)

@@ -5,7 +5,6 @@ using System.Text;
 using Selenium;
 using Signum.Utilities;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System.Linq.Expressions;
 
 namespace Signum.Web.Selenium
 {
@@ -23,10 +22,8 @@ namespace Signum.Web.Selenium
 
         public static void Search(this ISelenium selenium, string prefix)
         {
-            string searchButton = SearchSelector(prefix);
-            selenium.Click(searchButton);
-            selenium.WaitAjaxFinished(() => selenium.IsElementPresent(searchButton) && 
-                !selenium.IsElementPresent("{0}.sf-searching".Formato(searchButton)));
+            selenium.Click(SearchSelector(prefix));
+            selenium.WaitAjaxFinished(() => selenium.IsElementPresent(RowSelector(selenium, 1, prefix)));
         }
 
         public static void SetElementsPerPageToFinder(this ISelenium selenium, string elementsPerPage)
@@ -46,8 +43,8 @@ namespace Signum.Web.Selenium
 
         public static void ToggleFilters(this ISelenium selenium, bool show, string prefix)
         {
-            selenium.Click("jq=#{0}sfSearchControl .sf-filters-header".Formato(prefix));
-            selenium.WaitAjaxFinished(() => selenium.IsElementPresent("jq=#{0}sfSearchControl .sf-filters:{1}".Formato(prefix, show ? "visible" : "hidden")));
+            selenium.Click("jq=#{0}divSearchControl .sf-filters-header".Formato(prefix));
+            selenium.WaitAjaxFinished(() => selenium.IsElementPresent("jq=#{0}divSearchControl .sf-filters:{1}".Formato(prefix, show ? "visible" : "hidden")));
         }
 
         public static void FilterSelectToken(this ISelenium selenium, int tokenSelectorIndexBase0, string itemSelector, bool willExpand)
@@ -59,7 +56,17 @@ namespace Signum.Web.Selenium
         {
             selenium.Select("{0}ddlTokens_{1}".Formato(prefix, tokenSelectorIndexBase0), itemSelector);
             if (willExpand)
-                selenium.WaitAjaxFinished(() => selenium.IsElementPresent("{0}ddlTokens_{1}".Formato(prefix, tokenSelectorIndexBase0 + 1)));
+                selenium.WaitAjaxFinished(() => selenium.IsElementPresent("jq=#{0}lblddlTokens_{1}".Formato(prefix, tokenSelectorIndexBase0 + 1)));
+        }
+
+        public static void ExpandTokens(this ISelenium selenium, int tokenSelectorIndexBase0)
+        {
+            ExpandTokens(selenium, tokenSelectorIndexBase0, "");
+        }
+
+        public static void ExpandTokens(this ISelenium selenium, int tokenSelectorIndexBase0, string prefix)
+        {
+            selenium.Click("jq=#{0}lblddlTokens_{1}".Formato(prefix, tokenSelectorIndexBase0));
         }
 
         public static string FilterOperationSelector(int filterIndexBase0)
@@ -182,6 +189,20 @@ namespace Signum.Web.Selenium
             Assert.IsTrue(selenium.IsElementPresent("{0}:contains('{1}')".Formato(headerSelector, newName)));
         }
 
+        public static bool CanMoveColumn(this ISelenium selenium, int columnIndexBase1, bool left)
+        {
+            return CanMoveColumn(selenium, columnIndexBase1, left, "");
+        }
+
+        public static bool CanMoveColumn(this ISelenium selenium, int columnIndexBase1, bool left, string prefix)
+        {
+            string headerSelector = SearchTestExtensions.TableHeaderSelector(columnIndexBase1, prefix);
+            selenium.ContextMenu(headerSelector);
+            bool result = selenium.IsElementPresent("{0} .move-column-{1}".Formato(headerSelector, left ? "left" : "right"));
+            selenium.ContextMenu(headerSelector); //close it
+            return result;
+        }
+
         public static void MoveColumn(this ISelenium selenium, int columnIndexBase1, string columnName, bool left)
         {
             MoveColumn(selenium, columnIndexBase1, columnName, left, "");
@@ -190,11 +211,8 @@ namespace Signum.Web.Selenium
         public static void MoveColumn(this ISelenium selenium, int columnIndexBase1, string columnName, bool left, string prefix)
         {
             string headerSelector = SearchTestExtensions.TableHeaderSelector(columnIndexBase1, prefix);
-            string targetSelector = left ? 
-                "{0} .sf-header-droppable-left".Formato(SearchTestExtensions.TableHeaderSelector(columnIndexBase1 - 1, prefix)) :
-                "{0} .sf-header-droppable-right".Formato(SearchTestExtensions.TableHeaderSelector(columnIndexBase1 + 1, prefix));
-            
-            selenium.DragAndDropToObject(headerSelector, targetSelector);
+            selenium.ContextMenu(headerSelector);
+            selenium.Click("{0} .move-column-{1}".Formato(headerSelector, left ? "left" : "right"));
 
             selenium.WaitAjaxFinished(() => selenium.IsElementPresent("{0}:contains('{1}')".Formato(
                 SearchTestExtensions.TableHeaderSelector((left ? (columnIndexBase1 - 1) : (columnIndexBase1 + 1)), prefix),
@@ -474,7 +492,7 @@ namespace Signum.Web.Selenium
                 quickLinkIndexBase1));
         }
 
-        public static Expression<Func<bool>> ThereAreNRows(this ISelenium selenium, int n, string prefix)
+        public static Func<bool> ThereAreNRows(this ISelenium selenium, int n, string prefix)
         {
             if (n == 0)
                 n = 1; //there will be a row with the "no results" message
@@ -486,7 +504,7 @@ namespace Signum.Web.Selenium
                 !selenium.IsElementPresent(noRow);
         }
 
-        public static Expression<Func<bool>> ThereAreNRows(this ISelenium selenium, int n)
+        public static Func<bool> ThereAreNRows(this ISelenium selenium, int n)
         {
             return ThereAreNRows(selenium, n, "");
         }
@@ -534,13 +552,13 @@ namespace Signum.Web.Selenium
         public static string QueryMenuOptionLocator(string menuId, string optionId)
         {
             //check of menu and item classes is redundant but it must be in the html, so good for testing
-            return "jq=#{0}.sf-dropdown ul.sf-menu-button li.ui-menu-item a.sf-query-button#{1}".Formato(menuId, optionId); 
+            return "jq=#{0}.sf-query-button.sf-dropdown ul.sf-menu-button li.ui-menu-item a.sf-query-button#{1}".Formato(menuId, optionId); 
         }
 
         public static string QueryMenuOptionLocatorByAttr(string menuId, string optionLocator)
         {
             //check of menu and item classes is redundant but it must be in the html, so good for testing
-            return "jq=#{0}.sf-dropdown ul.sf-menu-button li.ui-menu-item a.sf-query-button[{1}]".Formato(menuId, optionLocator);
+            return "jq=#{0}.sf-query-button.sf-dropdown ul.sf-menu-button li.ui-menu-item a.sf-query-button[{1}]".Formato(menuId, optionLocator);
         }
 
         public static void QueryButtonClick(this ISelenium selenium, string id)
