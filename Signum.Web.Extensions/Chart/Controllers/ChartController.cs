@@ -68,7 +68,7 @@ namespace Signum.Web.Chart
             Type entitiesType = Lite.Extract(entityColumn.Type);
             Implementations implementations = entityColumn.Implementations.Value;
 
-            return implementations.IsByAll || implementations.Types.Any(t => Navigator.IsNavigable(t, null, isSearchEntity: true));
+            return implementations.IsByAll || implementations.Types.Any(t => Navigator.IsNavigable(t, null, isSearch: true));
         }
 
         [HttpPost]
@@ -76,7 +76,7 @@ namespace Signum.Web.Chart
         {
             string lastToken = Request["lastTokenChanged"];
             
-            var request = this.ExtractChartRequestCtx(lastToken.TryCS(int.Parse)).Value;   
+            var request = this.ExtractChartRequestCtx(lastToken.Try(int.Parse)).Value;   
 
             ViewData[ViewDataKeys.QueryDescription] = DynamicQueryManager.Current.QueryDescription(request.QueryName);
             
@@ -121,11 +121,8 @@ namespace Signum.Web.Chart
         {
             var requestCtx = this.ExtractChartRequestCtx(null).ValidateGlobal();
 
-            if (requestCtx.GlobalErrors.Any())
-            {
-                ModelState.FromContext(requestCtx);
-                return JsonAction.ModelState(ModelState);
-            }
+            if (requestCtx.HasErrors())
+                return requestCtx.ToJsonModelState();
 
             var request = requestCtx.Value;
 
@@ -214,8 +211,7 @@ namespace Signum.Web.Chart
         {
             var requestCtx = this.ExtractChartRequestCtx(null).ValidateGlobal();
 
-            ModelState.FromContext(requestCtx);
-            return JsonAction.ModelState(ModelState);
+            return requestCtx.ToJsonModelState();
         }
 
         [HttpPost]
@@ -237,7 +233,7 @@ namespace Signum.Web.Chart
         public MappingContext<ChartRequest> ExtractChartRequestCtx(int? lastTokenChanged)
         {
             var ctx = new ChartRequest(Navigator.ResolveQueryName(Request.Params["webQueryName"]))
-                .ApplyChanges(ControllerContext, ChartClient.MappingChartRequest, inputs: Request.Params.ToSortedList(this.Prefix()));
+                .ApplyChanges(this, ChartClient.MappingChartRequest, inputs: Request.Params.ToSortedList(this.Prefix()));
 
             ctx.Value.CleanOrderColumns();
 
@@ -270,7 +266,7 @@ namespace Signum.Web.Chart
 
             var userChart = request.ToUserChart();
 
-            userChart.Related = UserDN.Current.ToLite();
+            userChart.Owner = UserDN.Current.ToLite();
 
             ViewData[ViewDataKeys.QueryDescription] = DynamicQueryManager.Current.QueryDescription(request.QueryName);
 

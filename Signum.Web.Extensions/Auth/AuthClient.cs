@@ -31,12 +31,10 @@ namespace Signum.Web.Auth
         {
             return RouteHelper.New().Action((AuthController c) => c.Login(returnUrl));
         };
-
-        public static string CookieName = "sfUser";
-         
+ 
         public static string ViewPrefix = "~/auth/Views/{0}.cshtml";
 
-        public static string Module = "Extensions/Signum.Web.Extensions/Auth/Scripts/Auth";
+        public static JsModule Module = new JsModule("Extensions/Signum.Web.Extensions/Auth/Scripts/Auth");
         
         public static string LoginView = ViewPrefix.Formato("Login");
         public static string LoginUserControlView = ViewPrefix.Formato("LoginUserControl");
@@ -84,7 +82,7 @@ namespace Signum.Web.Auth
 
                 if (property)
                 {
-                    Common.CommonTask += new CommonTask(TaskAuthorizeProperties);
+                    Common.CommonTask += TaskAuthorizeProperties;
                     Mapping.CanChange += Mapping_CanChange;
                 }
 
@@ -136,14 +134,14 @@ namespace Signum.Web.Auth
                 {
                     new EntityOperationSettings(UserOperation.SetPassword) 
                     { 
-                        OnClick = ctx => new JsOperationFunction(Module, "setPassword", 
+                        OnClick = ctx => Module["setPassword"](ctx.Options(), 
                             ctx.Url.Action((AuthController c)=>c.SetPasswordModel()),
                             ctx.Url.Action((AuthController c)=>c.SetPasswordOnOk()))
                     },
 
                     new EntityOperationSettings(UserOperation.SaveNew) 
                     { 
-                         OnClick = ctx => new JsOperationFunction(Module, "saveNew", 
+                         OnClick = ctx => Module["saveNew"](ctx.Options(), 
                             ctx.Url.Action((AuthController c)=>c.SaveNewUser()))
                     }
                 });

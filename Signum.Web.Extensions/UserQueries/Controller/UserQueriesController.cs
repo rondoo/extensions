@@ -59,7 +59,7 @@ namespace Signum.Web.UserQueries
 
             var userQuery = ToUserQuery(request);
 
-            userQuery.Related = UserDN.Current.ToLite();
+            userQuery.Owner = UserDN.Current.ToLite();
 
             return Navigator.NormalPage(this, userQuery);
         }
@@ -84,13 +84,10 @@ namespace Signum.Web.UserQueries
             }
             catch(Exception){}
 
-            var context = userQuery.ApplyChanges(this.ControllerContext, true).ValidateGlobal();
+            var context = userQuery.ApplyChanges(this).ValidateGlobal();
 
-            if (context.GlobalErrors.Any())
-            {
-                ModelState.FromContext(context);
-                return JsonAction.ModelState(ModelState);
-            }
+            if (context.HasErrors())
+                return context.ToJsonModelState();
 
             userQuery = context.Value.Execute(UserQueryOperation.Save);
 

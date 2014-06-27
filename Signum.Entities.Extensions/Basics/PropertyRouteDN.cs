@@ -27,15 +27,15 @@ namespace Signum.Entities.Basics
         public string Path
         {
             get { return path; }
-            set { SetToStr(ref path, value, () => Path); }
+            set { SetToStr(ref path, value); }
         }
 
-        TypeDN type;
+        TypeDN rootType;
         [NotNullValidator]
-        public TypeDN Type
+        public TypeDN RootType
         {
-            get { return type; }
-            set { Set(ref type, value, () => Type); }
+            get { return rootType; }
+            set { Set(ref rootType, value); }
         }
 
         static readonly Expression<Func<PropertyRouteDN, string>> ToStringExpression = e => e.path;

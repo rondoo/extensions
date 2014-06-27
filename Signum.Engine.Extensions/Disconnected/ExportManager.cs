@@ -298,8 +298,6 @@ namespace Signum.Engine.Disconnected
             string fileName = DatabaseFileName(machine);
             string logFileName = DatabaseLogFileName(machine);
 
-            DisconnectedTools.CreateDatabaseDirectory(fileName);
-            DisconnectedTools.CreateDatabaseDirectory(logFileName);
             DisconnectedTools.CreateDatabase(databaseName, fileName, logFileName);
 
             return ((SqlConnector)Connector.Current).ConnectionString.Replace(Connector.Current.DatabaseName(), databaseName.Name);
@@ -309,7 +307,7 @@ namespace Signum.Engine.Disconnected
         {
             DisconnectedTools.EnableForeignKeys(table);
 
-            foreach (var rt in table.RelationalTables())
+            foreach (var rt in table.TablesMList())
                 DisconnectedTools.EnableForeignKeys(rt);
         }
 
@@ -317,14 +315,14 @@ namespace Signum.Engine.Disconnected
         {
             DisconnectedTools.DisableForeignKeys(table);
 
-            foreach (var rt in table.RelationalTables())
+            foreach (var rt in table.TablesMList())
                 DisconnectedTools.DisableForeignKeys(rt);
         }
 
         protected virtual void BackupDatabase(DisconnectedMachineDN machine, Lite<DisconnectedExportDN> export, Connector newDatabase)
         {
             string backupFileName = Path.Combine(DisconnectedLogic.BackupFolder, BackupFileName(machine, export));
-            DisconnectedTools.CreateDatabaseDirectory(backupFileName);
+            FileTools.CreateParentDirectory(backupFileName);
             DisconnectedTools.BackupDatabase(new DatabaseName(null, newDatabase.DatabaseName()), backupFileName);
         }
 
@@ -359,7 +357,7 @@ namespace Signum.Engine.Disconnected
 
             CopyTableBasic(table, newDatabaseName, filter);
 
-            foreach (var rt in table.RelationalTables())
+            foreach (var rt in table.TablesMList())
                 CopyTableBasic(rt, newDatabaseName, filter == null ? null : (SqlPreCommandSimple)filter.Clone());
         }
 
@@ -373,8 +371,8 @@ SELECT {3}
                     from {1} as [table]".Formato(
                     newTableName,
                     table.Name,
-                    table.Columns.Keys.ToString(a => a.SqlScape(), ", "),
-                    table.Columns.Keys.ToString(a => "[table]." + a.SqlScape(), ", "));
+                    table.Columns.Keys.ToString(a => a.SqlEscape(), ", "),
+                    table.Columns.Keys.ToString(a => "[table]." + a.SqlEscape(), ", "));
 
             if (filter != null)
             {
@@ -384,9 +382,9 @@ SELECT {3}
                 }
                 else
                 {
-                    RelationalTable rt = (RelationalTable)table;
+                    TableMList rt = (TableMList)table;
                     command +=
-                        "\r\nJOIN {0} [masterTable] on [table].{1} = [masterTable].Id".Formato(rt.BackReference.ReferenceTable.Name, rt.BackReference.Name.SqlScape()) +
+                        "\r\nJOIN {0} [masterTable] on [table].{1} = [masterTable].Id".Formato(rt.BackReference.ReferenceTable.Name, rt.BackReference.Name.SqlEscape()) +
                         "\r\nWHERE [masterTable].Id in ({0})".Formato(filter.Sql);
                 }
             }
@@ -396,7 +394,7 @@ SELECT {3}
                 command + "\r\n" +
                 "SET IDENTITY_INSERT {0} OFF\r\n".Formato(newTableName);
 
-            return Executor.ExecuteNonQuery(fullCommand, filter.TryCC(a => a.Parameters));
+            return Executor.ExecuteNonQuery(fullCommand, filter.Try(a => a.Parameters));
         }
 
         protected virtual SqlPreCommandSimple GetWhere(DisconnectedStrategy<T> pair)

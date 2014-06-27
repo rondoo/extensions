@@ -23,6 +23,8 @@ namespace Signum.Engine.Authorization
 
         public static bool IsStarted { get { return cache != null; } }
 
+        public static readonly HashSet<PropertyRoute> AvoidAutomaticUpgrade = new HashSet<PropertyRoute>();
+
         public static void Start(SchemaBuilder sb, bool queries)
         {
             if (sb.NotDefined(MethodInfo.GetCurrentMethod()))
@@ -47,7 +49,7 @@ namespace Signum.Engine.Authorization
                 {
                     Dictionary<Type, Dictionary<string, PropertyRoute>> routesDicCache = new Dictionary<Type, Dictionary<string, PropertyRoute>>();
 
-                    string replacementKey = typeof(OperationDN).Name;
+                    string replacementKey = typeof(OperationSymbol).Name;
 
                     var groups =  x.Element("Properties").Elements("Role").SelectMany(r => r.Elements("Property")).Select(p => new PropertyPair(p.Attribute("Resource").Value))
                         .AgGroupToDictionary(a=>a.Type, gr=>gr.Select(pp=> pp.Property).ToHashSet());
@@ -122,7 +124,7 @@ namespace Signum.Engine.Authorization
 
         public static void SetPropertyRules(PropertyRulePack rules)
         {
-            cache.SetRules(rules, r => r.Type == rules.Type); 
+            cache.SetRules(rules, r => r.RootType == rules.Type); 
         }
 
         public static PropertyAllowed GetPropertyAllowed(Lite<RoleDN> role, PropertyRoute property)
@@ -182,6 +184,9 @@ namespace Signum.Engine.Authorization
             PropertyAllowed best = AuthLogic.GetMergeStrategy(role) == MergeStrategy.Union ?
                 Max(baseValues.Select(a => a.Value)) :
                 Min(baseValues.Select(a => a.Value));
+
+            if (PropertyAuthLogic.AvoidAutomaticUpgrade.Contains(key))
+                return best;
 
             if (baseValues.Where(a => a.Value.Equals(best)).All(a => GetDefault(key, a.Key).Equals(a.Value)))
                 return GetDefault(key, role);

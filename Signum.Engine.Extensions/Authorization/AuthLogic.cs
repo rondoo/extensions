@@ -144,8 +144,7 @@ namespace Signum.Engine.Authorization
                         e.UserName,
                         e.Email,
                         e.Role,
-                        e.PasswordNeverExpires,
-                        e.PasswordSetDate,
+                        e.State,
                         e.Related,
                     });
 
@@ -432,7 +431,7 @@ namespace Signum.Engine.Authorization
                     var r = rolesDic[kvp.Key];
 
                     var current = GetMergeStrategy(r);
-                    var should = kvp.Value.Attribute("MergeStrategy").TryCS(t => t.Value.ToEnum<MergeStrategy>()) ?? MergeStrategy.Union;
+                    var should = kvp.Value.Attribute("MergeStrategy").Try(t => t.Value.ToEnum<MergeStrategy>()) ?? MergeStrategy.Union;
 
                     if (current != should)
                         throw new InvalidOperationException("Merge strategy of {0} is {1} in the database but is {2} in the file".Formato(r, current, should));
@@ -508,7 +507,7 @@ namespace Signum.Engine.Authorization
             var roleInfos = doc.Root.Element("Roles").Elements("Role").Select(x => new
             {
                 Name = x.Attribute("Name").Value,
-                MergeStrategy = x.Attribute("MergeStrategy").TryCS(ms => ms.Value.ToEnum<MergeStrategy>()) ?? MergeStrategy.Union,
+                MergeStrategy = x.Attribute("MergeStrategy").Try(ms => ms.Value.ToEnum<MergeStrategy>()) ?? MergeStrategy.Union,
                 SubRoles = x.Attribute("Contains").Value.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
             }).ToList();
 
@@ -526,7 +525,7 @@ namespace Signum.Engine.Authorization
         public static void SynchronizeRoles(XDocument doc)
         {
             Table table = Schema.Current.Table(typeof(RoleDN));
-            RelationalTable relationalTable = table.RelationalTables().Single();
+            TableMList relationalTable = table.TablesMList().Single();
 
             Dictionary<string, XElement> rolesXml = doc.Root.Element("Roles").Elements("Role").ToDictionary(x => x.Attribute("Name").Value);
 
@@ -542,13 +541,13 @@ namespace Signum.Engine.Authorization
                     (name, xelement) => table.InsertSqlSync(new RoleDN { Name = name }, includeCollections: false),
                     (name, role) => SqlPreCommand.Combine(Spacing.Simple,
                             new SqlPreCommandSimple("DELETE {0} WHERE {1} = {2} --{3}"
-                                .Formato(relationalTable.Name, ((IColumn)relationalTable.Field).Name.SqlScape(), role.Id, role.Name)),
+                                .Formato(relationalTable.Name, ((IColumn)relationalTable.Field).Name.SqlEscape(), role.Id, role.Name)),
                             table.DeleteSqlSync(role)),
                     (name, xElement, role) =>
                     {
                         var oldName = role.Name;
                         role.Name = name;
-                        role.MergeStrategy = xElement.Attribute("MergeStrategy").TryCS(t => t.Value.ToEnum<MergeStrategy>()) ?? MergeStrategy.Union;
+                        role.MergeStrategy = xElement.Attribute("MergeStrategy").Try(t => t.Value.ToEnum<MergeStrategy>()) ?? MergeStrategy.Union;
                         return table.UpdateSqlSync(role, includeCollections: false, comment: oldName);
                     }, Spacing.Double);
 

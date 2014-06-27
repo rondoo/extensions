@@ -9,14 +9,14 @@ import Validator = require("Framework/Signum.Web/Signum/Scripts/Validator")
 
 export function saveNew(options: Operations.EntityOperationOptions, url: string) {
     options.controllerUrl = url;
-
+    options.avoidValidate = true;
     Operations.executeDefault(options); 
 }
 
 
 export function setPassword(options: Operations.EntityOperationOptions, urlModel: string, urlSetPassword: string) {
 
-    var passPrefix = SF.compose(options.prefix, "Pass")
+    var passPrefix = options.prefix.child("Pass")
 
     Navigator.viewPopup(Entities.EntityHtml.withoutType(passPrefix), {
         controllerUrl: urlModel,

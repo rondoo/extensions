@@ -61,12 +61,16 @@
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\..\Framework\Dependencies\Json.Net\Newtonsoft.Json.dll</HintPath>
+    </Reference>
     <Reference Include="PresentationFramework.Aero" />
     <Reference Include="System" />
     <Reference Include="System.Core">
       <RequiredTargetFramework>3.5</RequiredTargetFramework>
     </Reference>
     <Reference Include="System.Drawing" />
+    <Reference Include="System.ServiceModel" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xaml" />
@@ -258,6 +262,10 @@
     </Compile>
     <Compile Include="ExtensionsImageLoader.cs" />
     <Compile Include="Files\ImageFileExtension.cs" />
+    <Compile Include="Isolation\IsolationClient.cs" />
+    <Compile Include="Isolation\IsolationWidget.xaml.cs">
+      <DependentUpon>IsolationWidget.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Mailing\ClientCertificationFile.xaml.cs">
       <DependentUpon>ClientCertificationFile.xaml</DependentUpon>
     </Compile>
@@ -311,9 +319,6 @@
     <Compile Include="Processes\ProcessClient.cs" />
     <Compile Include="Processes\ProcessUI.xaml.cs">
       <DependentUpon>ProcessUI.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="Processes\UserProcessSession.xaml.cs">
-      <DependentUpon>UserProcessSession.xaml</DependentUpon>
     </Compile>
     <Compile Include="Profiler\ProfilerClient.cs" />
     <Compile Include="Profiler\ProfilerUploader.xaml.cs">
@@ -651,6 +656,10 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Isolation\IsolationWidget.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Mailing\ClientCertificationFile.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
@@ -718,10 +727,6 @@
       <Generator>MSBuild:Compile</Generator>
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
-    </Page>
-    <Page Include="Processes\UserProcessSession.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="Profiler\ProfilerUploader.xaml">
       <SubType>Designer</SubType>
@@ -983,12 +988,6 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Chart\Html\ChartContainer.htm" />
-    <EmbeddedResource Include="Chart\Html\jquery-1.7.2.min.js" />
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="..\..\Framework\Signum.Web\Signum\Content\reset.css">
-      <Link>Chart\Html\reset.css</Link>
-    </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Chart\Html\colorbrewer.js" />
@@ -1030,6 +1029,9 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Chart\Html\d3.v3.min.js" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Chart\Html\jquery-1.11.0.js" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

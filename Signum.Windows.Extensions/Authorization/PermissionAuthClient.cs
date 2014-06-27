@@ -15,13 +15,15 @@ namespace Signum.Windows.Authorization
     {
         public static bool Started { get; private set; }
 
-        static DefaultDictionary<Enum, bool> permissionRules;
+        static DefaultDictionary<PermissionSymbol, bool> permissionRules;
 
         internal static void Start()
         {
             Started = true;
 
             AuthClient.UpdateCacheEvent += new Action(AuthClient_UpdateCacheEvent);
+
+            Server.SetSymbolIds<PermissionSymbol>();
 
             LinksClient.RegisterEntityLinks<RoleDN>((r, c) =>
             {
@@ -43,7 +45,7 @@ namespace Signum.Windows.Authorization
         }
 
 
-        public static bool IsAuthorized(this Enum permissionKey)
+        public static bool IsAuthorized(this PermissionSymbol permissionSymbol)
         {
             if (!Started)
                 return true;
@@ -51,23 +53,23 @@ namespace Signum.Windows.Authorization
             if (permissionRules == null)
                 throw new InvalidOperationException("Permissions not enabled in AuthClient");
 
-            return permissionRules.GetAllowed(permissionKey);
+            return permissionRules.GetAllowed(permissionSymbol);
         }
 
-        public static void Authorize(this Enum permissionKey)
+        public static void Authorize(this PermissionSymbol permissionSymbol)
         {
-            if (IsAuthorized(permissionKey) == false)
-                throw new UnauthorizedAccessException("Permission '{0}' is denied".Formato(permissionKey));
+            if (IsAuthorized(permissionSymbol) == false)
+                throw new UnauthorizedAccessException("Permission '{0}' is denied".Formato(permissionSymbol));
         }
     }
 
     [MarkupExtensionReturnType(typeof(bool))]
     public class PermissionAllowedExtension : MarkupExtension
     {
-        Enum permission;
+        PermissionSymbol permission;
         public PermissionAllowedExtension(object value)
         {
-            this.permission = (Enum)value;
+            this.permission = (PermissionSymbol)value;
         }
 
         public override object ProvideValue(IServiceProvider serviceProvider)
@@ -79,10 +81,10 @@ namespace Signum.Windows.Authorization
     [MarkupExtensionReturnType(typeof(Visibility))]
     public class PermissionVisiblityExtension : MarkupExtension
     {
-        Enum permission;
+        PermissionSymbol permission;
         public PermissionVisiblityExtension(object value)
         {
-            this.permission = (Enum)value;
+            this.permission = (PermissionSymbol)value;
         }
 
         public override object ProvideValue(IServiceProvider serviceProvider)

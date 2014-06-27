@@ -27,7 +27,7 @@ namespace Signum.Web.Help
     public static class HelpClient
     {
         public static string ViewPrefix = "~/Help/Views/{0}.cshtml";
-        public static string Module = "Extensions/Signum.Web.Extensions/Help/Scripts/help"; 
+        public static JsModule Module = new JsModule("Extensions/Signum.Web.Extensions/Help/Scripts/help"); 
 
         //pages        
         public static string IndexUrl =  ViewPrefix.Formato("Index");
@@ -180,7 +180,7 @@ namespace Signum.Web.Help
                         return new WikiLink(link, text);
 
                     case WikiFormat.OperationLink:
-                        Enum operation = MultiEnumLogic<OperationDN>.TryToEnum(link);
+                        OperationSymbol operation = SymbolLogic<OperationSymbol>.TryToSymbol(link);
 
                         List<Type> types = OperationLogic.FindTypes(operation).Where(TypeLogic.TypeToDN.ContainsKey).ToList();
                         if (types.Count == 1)

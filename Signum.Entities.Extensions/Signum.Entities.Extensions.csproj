@@ -71,6 +71,7 @@
       <RequiredTargetFramework>3.5</RequiredTargetFramework>
     </Reference>
     <Reference Include="System.Drawing" />
+    <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.ServiceModel">
       <RequiredTargetFramework>3.0</RequiredTargetFramework>
     </Reference>
@@ -98,6 +99,7 @@
     <Compile Include="Authorization\User.cs" />
     <Compile Include="ControlPanel\ControlPanelOmniboxResultGenerator.cs" />
     <Compile Include="Help\HelpMessage.cs" />
+    <Compile Include="Isolation\IsolationDN.cs" />
     <Compile Include="Mailing\EmailMasterTemplate.cs" />
     <Compile Include="Mailing\Pop3Configuration.cs" />
     <Compile Include="Mailing\SystemEmail.cs" />
@@ -105,9 +107,7 @@
     <Compile Include="Scheduler\ApplicationEventLog.cs" />
     <Compile Include="SMS\SMSConfigurationDN.cs" />
     <Compile Include="Translation\CultureInfoDN.cs" />
-    <Compile Include="Basics\HourMinuteDN.cs" />
     <Compile Include="Basics\DateSpanDN.cs" />
-    <Compile Include="Basics\MultiOptionalEnumDN.cs" />
     <Compile Include="Basics\TypeConditionName.cs" />
     <Compile Include="Basics\PropertyRouteDN.cs" />
     <Compile Include="Basics\QueryDN.cs" />

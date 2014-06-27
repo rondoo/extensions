@@ -29,7 +29,7 @@ namespace Signum.Engine.Alerts
             return AlertsExpression.Evaluate(e);
         }
 
-        public static HashSet<Enum> SystemAlertTypes = new HashSet<Enum>();
+        public static HashSet<AlertTypeDN> SystemAlertTypes = new HashSet<AlertTypeDN>();
         static bool started = false;
 
         public static void AssertStarted(SchemaBuilder sb)
@@ -71,7 +71,7 @@ namespace Signum.Engine.Alerts
                         t.Key,
                     });
 
-                MultiOptionalEnumLogic<AlertTypeDN>.Start(sb, () => SystemAlertTypes);
+                SemiSymbolLogic<AlertTypeDN>.Start(sb, () => SystemAlertTypes);
 
                 new Graph<AlertTypeDN>.Execute(AlertTypeOperation.Save)
                 {
@@ -91,38 +91,46 @@ namespace Signum.Engine.Alerts
             }
         }
 
-        public static void RegisterAlertType(Enum alertType)
+        public static void RegisterAlertType(AlertTypeDN alertType)
         {
+            if (!alertType.Key.HasText())
+                throw new InvalidOperationException("alertType must have a key, use MakeSymbol method after the constructor when declaring it");
+
             SystemAlertTypes.Add(alertType);
         }
 
-        public static AlertDN CreateAlert(this IIdentifiable entity, string text, Enum alertType, DateTime? alertDate = null, Lite<UserDN> user = null, string title = null)
+        public static AlertDN CreateAlert(this IIdentifiable entity, string text, AlertTypeDN alertType, DateTime? alertDate = null, Lite<IUserDN> user = null, string title = null)
         {
-            return CreateAlert(entity.ToLite(), text, alertType, alertDate, user, title);
+            return CreateAlert(entity.ToLiteFat(), text, alertType, alertDate, user, title);
         }
 
-        public static AlertDN CreateAlert<T>(this Lite<T> entity, string text, Enum alertType, DateTime? alertDate = null, Lite<UserDN> user = null, string title = null) where T : class, IIdentifiable
+        public static AlertDN CreateAlert<T>(this Lite<T> entity, string text, AlertTypeDN alertType, DateTime? alertDate = null, Lite<IUserDN> user = null, string title = null) where T : class, IIdentifiable
         {
             if (started == false)
                 return null;
 
-            return new AlertDN
+            var result = new AlertDN
             {
                 AlertDate = alertDate ?? TimeZoneManager.Now,
-                CreatedBy = user ?? UserDN.Current.ToLite(),
+                CreatedBy = user ?? UserHolder.Current.ToLite(),
                 Text = text,
                 Title = title,
                 Target = (Lite<IdentifiableEntity>)Lite.Create(entity.EntityType, entity.Id, entity.ToString()),
-                AlertType = MultiOptionalEnumLogic<AlertTypeDN>.ToEntity(alertType)
-            }.Execute(AlertOperation.SaveNew);
+                AlertType = alertType
+            };
+
+            if (result.Mixins.Any())
+                result.CopyMixinsFrom(entity.Retrieve());
+
+            return result.Execute(AlertOperation.SaveNew);
         }
 
-        public static AlertDN CreateAlertForceNew(this IIdentifiable entity, string text, Enum alertType, DateTime? alertDate = null, Lite<UserDN> user = null)
+        public static AlertDN CreateAlertForceNew(this IIdentifiable entity, string text, AlertTypeDN alertType, DateTime? alertDate = null, Lite<IUserDN> user = null)
         {
             return CreateAlertForceNew(entity.ToLite(), text, alertType, alertDate, user);
         }
 
-        public static AlertDN CreateAlertForceNew<T>(this Lite<T> entity, string text, Enum alertType, DateTime? alertDate = null, Lite<UserDN> user = null) where T : class, IIdentifiable
+        public static AlertDN CreateAlertForceNew<T>(this Lite<T> entity, string text, AlertTypeDN alertType, DateTime? alertDate = null, Lite<IUserDN> user = null) where T : class, IIdentifiable
         {
             if (started == false)
                 return null;
@@ -133,11 +141,6 @@ namespace Signum.Engine.Alerts
 
                 return tr.Commit(alerta);
             }
-        }
-
-        public static AlertTypeDN GetAlertType(Enum alertType)
-        {
-            return MultiOptionalEnumLogic<AlertTypeDN>.ToEntity(alertType);
         }
     }
 
@@ -153,7 +156,7 @@ namespace Signum.Engine.Alerts
                 Construct = (a, _) => new AlertDN
                 {
                     AlertDate = TimeZoneManager.Now,
-                    CreatedBy = UserDN.Current.ToLite(),
+                    CreatedBy = UserHolder.Current.ToLite(),
                     Text = null,
                     Title = null,
                     Target = a.ToLite(),
