@@ -26,11 +26,13 @@ namespace Signum.Web.Auth
     [AuthenticationRequired(false)]
     public class AuthController : Controller
     {
+        public static bool MergeInvalidUsernameAndPasswordMessages = true;
+
         public static event Func<string> GenerateRandomPassword = () => MyRandom.Current.NextString(8);
 
-        public static event Action OnUserLogged;
-        public static event Func<Controller, UserDN, ActionResult> OnUserPreLogin;
-        public static event Func<Controller, string> OnUserLoggedDefaultRedirect = c =>
+        public static event Action UserLogged;
+        public static event Action<Controller, UserDN> UserPreLogin;
+        public static event Func<Controller, string> UserLoggedRedirect = c =>
         {
             string referrer = c.ControllerContext.HttpContext.Request["referrer"];
 
@@ -40,8 +42,8 @@ namespace Signum.Web.Auth
             return RouteHelper.New().Action("Index", "Home");
         };
 
-        public static event Action OnUserLoggingOut;
-        public static event Func<Controller, string> OnUserLogoutRedirect = c =>
+        public static event Action UserLoggingOut;
+        public static event Func<Controller, string> UserLogoutRedirect = c =>
         {
             return RouteHelper.New().Action("Index", "Home");
         };
@@ -49,13 +51,10 @@ namespace Signum.Web.Auth
         [AcceptVerbs(HttpVerbs.Post)]
         public ActionResult SaveNewUser()
         {
-            var context = this.ExtractEntity<UserDN>().ApplyChanges(this.ControllerContext, UserMapping.NewUser).ValidateGlobal();
+            var context = this.ExtractEntity<UserDN>().ApplyChanges(this, UserMapping.NewUser).ValidateGlobal();
 
-            if (context.GlobalErrors.Any())
-            {
-                this.ModelState.FromContext(context);
-                return JsonAction.ModelState(ModelState);
-            }
+            if (context.HasErrors())
+                return context.ToJsonModelState();
 
             context.Value.Execute(UserOperation.SaveNew);
             return this.DefaultExecuteResult(context.Value);
@@ -76,7 +75,7 @@ namespace Signum.Web.Auth
         {
             var passPrefix = Request["passPrefix"];
 
-            var context = this.ExtractEntity<SetPasswordModel>(passPrefix).ApplyChanges(this.ControllerContext, true, passPrefix);
+            var context = this.ExtractEntity<SetPasswordModel>(passPrefix).ApplyChanges(this, passPrefix);
 
             UserDN user = this.ExtractLite<UserDN>()
                 .ExecuteLite(UserOperation.SetPassword, context.Value.Password);
@@ -112,9 +111,9 @@ namespace Signum.Web.Auth
                     using (AuthLogic.Disable())
                         user = AuthLogic.RetrieveUser(username);
 
-                    var context = user.ApplyChanges(this.ControllerContext, UserMapping.ChangePasswordOld, "").ValidateGlobal();
+                    var context = user.ApplyChanges(this, UserMapping.ChangePasswordOld, "").ValidateGlobal();
 
-                    if (context.GlobalErrors.Any())
+                    if (context.HasErrors())
                     {
                         ViewData["username"] = username;
                         ModelState.FromContext(context);
@@ -131,8 +130,8 @@ namespace Signum.Web.Auth
                 }
                 else
                 {
-                    var context = UserDN.Current.ApplyChanges(this.ControllerContext, UserMapping.ChangePasswordOld, "").ValidateGlobal();
-                    if (context.GlobalErrors.Any())
+                    var context = UserDN.Current.ApplyChanges(this, UserMapping.ChangePasswordOld, "").ValidateGlobal();
+                    if (context.HasErrors())
                     {
                         ModelState.FromContext(context);
                         RefreshSessionUserChanges();
@@ -197,20 +196,26 @@ namespace Signum.Web.Auth
 
             using (AuthLogic.Disable())
             {
-                var user = ResetPasswordRequestLogic.GetUserByEmail(email);
-                Func<ResetPasswordRequestDN, string> url = (ResetPasswordRequestDN rpr) => HttpContext.Request.Url.GetLeftPart(UriPartial.Authority) + Url.Action<AuthController>(ac => ac.ResetPasswordCode(email, rpr.Code));
-                ResetPasswordRequestLogic.ResetPasswordRequestAndSendEmail(user, url);
+                UserDN user = ResetPasswordRequestLogic.GetUserByEmail(email);
+
+                if(user == null)
+                {
+                    ModelState.AddModelError("email", AuthMessage.ThereSNotARegisteredUserWithThatEmailAddress.NiceToString());
+                    return View(AuthClient.ResetPasswordView);
+                }
+
+                ResetPasswordRequestDN rpr = ResetPasswordRequestLogic.ResetPasswordRequest(user);
+                string url = HttpContext.Request.Url.GetLeftPart(UriPartial.Authority) + Url.Action<AuthController>(ac => ac.ResetPasswordCode(email, rpr.Code));
+                new ResetPasswordRequestMail { Entity = rpr, Url = url }.SendMailAsync();
             }
 
-            ViewData["email"] = email;
+            TempData["email"] = email;
             return RedirectToAction("ResetPasswordSend");
         }
 
         [AcceptVerbs(HttpVerbs.Get)]
         public ActionResult ResetPasswordSend()
         {
-            ViewData["Message"] = AuthMessage.ResetPasswordCodeHasBeenSent.NiceToString().Formato(ViewData["email"]);
-
             return View(AuthClient.ResetPasswordSendView);
         }
 
@@ -249,7 +254,7 @@ namespace Signum.Web.Auth
 
                 var user = request.User;
 
-                var context = user.ApplyChanges(this.ControllerContext, UserMapping.ChangePassword, "").ValidateGlobal();
+                var context = user.ApplyChanges(this, UserMapping.ChangePassword, "").ValidateGlobal();
 
                 if (!context.Errors.TryGetC(UserMapping.NewPasswordKey).IsNullOrEmpty() ||
                     !context.Errors.TryGetC(UserMapping.NewPasswordBisKey).IsNullOrEmpty())
@@ -309,10 +314,10 @@ namespace Signum.Web.Auth
         {
             // Basic parameter validation
             if (!username.HasText())
-                return LoginErrorAjaxOrForm("username", AuthMessage.UserNameMustHaveAValue.NiceToString());
+                return LoginError("username", AuthMessage.UserNameMustHaveAValue.NiceToString());
 
             if (string.IsNullOrEmpty(password))
-                return LoginErrorAjaxOrForm("password", AuthMessage.PasswordMustHaveAValue.NiceToString());
+                return LoginError("password", AuthMessage.PasswordMustHaveAValue.NiceToString());
 
             // Attempt to login
             UserDN user = null;
@@ -328,38 +333,27 @@ namespace Signum.Web.Auth
             }
             catch (IncorrectUsernameException)
             {
-                return LoginErrorAjaxOrForm(Request.IsAjaxRequest() ? "username" : "_FORM", AuthMessage.InvalidUsernameOrPassword.NiceToString());
+                return LoginError("username", MergeInvalidUsernameAndPasswordMessages ?
+                    AuthMessage.InvalidUsernameOrPassword.NiceToString() :
+                    AuthMessage.InvalidUsername.NiceToString());
             }
             catch (IncorrectPasswordException)
             {
-                return LoginErrorAjaxOrForm(Request.IsAjaxRequest() ? "password" : "_FORM", AuthMessage.InvalidUsernameOrPassword.NiceToString());
+                return LoginError("password", MergeInvalidUsernameAndPasswordMessages ?
+                    AuthMessage.InvalidUsernameOrPassword.NiceToString() :
+                    AuthMessage.InvalidPassword.NiceToString());
             }
 
             if (user == null)
                 throw new Exception(AuthMessage.ExpectedUserLogged.NiceToString());
 
-
-            if (OnUserPreLogin != null)
-            {
-                var result = OnUserPreLogin(this, user);
-                if (result != null)
-                    return result;
-            }
+            OnUserPreLogin(this, user);
 
             UserDN.Current = user;
 
-            //guardamos una cookie persistente si se ha seleccionado
-            if (rememberMe.HasValue && rememberMe.Value)
+            if (rememberMe == true)
             {
-                string ticketText = UserTicketLogic.NewTicket(
-                       System.Web.HttpContext.Current.Request.UserHostAddress);
-
-                HttpCookie cookie = new HttpCookie(AuthClient.CookieName, ticketText)
-                {
-                    Expires = DateTime.UtcNow.Add(UserTicketLogic.ExpirationInterval),
-                };
-
-                System.Web.HttpContext.Current.Response.Cookies.Add(cookie);
+                UserTicketClient.SaveCookie();
             }
 
             AddUserSession(user);
@@ -367,74 +361,25 @@ namespace Signum.Web.Auth
             TempData["Message"] = AuthLogic.OnLoginMessage();
 
 
-            return this.RedirectHttpOrAjax(OnUserLoggedDefaultRedirect(this));
+            return this.RedirectHttpOrAjax(UserLoggedRedirect(this));
 
         }
 
-        private ActionResult LoginErrorAjaxOrForm(string key, string message)
+        internal static void OnUserPreLogin(Controller controller, UserDN user)
         {
-            if (Request.IsAjaxRequest())
+            if (UserPreLogin != null)
             {
-                ModelState.Clear();
-                ModelState.AddModelError(key, message, "");
-                return JsonAction.ModelState(ModelState);
+                UserPreLogin(controller, user);
             }
-            else
-                return LoginError(key, message);
         }
 
-        ViewResult LoginError(string key, string error)
+        public ViewResult LoginError(string key, string error)
         {
             ModelState.AddModelError(key, error);
             return View(AuthClient.LoginView);
         }
 
-        public static bool LoginFromCookie()
-        {
-            using (AuthLogic.Disable())
-            {
-                try
-                {
-                    var authCookie = System.Web.HttpContext.Current.Request.Cookies[AuthClient.CookieName];
-                    if (authCookie == null || !authCookie.Value.HasText())
-                        return false;   //there is no cookie
-
-                    string ticketText = authCookie.Value;
-
-                    UserDN user = UserTicketLogic.UpdateTicket(
-                           System.Web.HttpContext.Current.Request.UserHostAddress,
-                           ref ticketText);
-
-                    if (OnUserPreLogin != null)
-                    {
-                        var result = OnUserPreLogin(null, user);
-                        if (result != null)
-                        {
-                            //We can not execute :S
-                        }
-                    }
-
-                    System.Web.HttpContext.Current.Response.Cookies.Add(new HttpCookie(AuthClient.CookieName, ticketText)
-                    {
-                        Expires = DateTime.UtcNow.Add(UserTicketLogic.ExpirationInterval),
-                    });
-
-                    AddUserSession(user);
-                    return true;
-                }
-                catch
-                {
-                    //Remove cookie
-                    HttpCookie cookie = new HttpCookie(AuthClient.CookieName)
-                    {
-                        Expires = DateTime.UtcNow.AddDays(-10) // or any other time in the past
-                    };
-                    System.Web.HttpContext.Current.Response.Cookies.Set(cookie);
-
-                    return false;
-                }
-            }
-        }
+      
         #endregion
 
 
@@ -455,30 +400,28 @@ namespace Signum.Web.Auth
         {
             UserDN.Current = user;
 
-            if (OnUserLogged != null)
-                OnUserLogged();
+            if (UserLogged != null)
+                UserLogged();
         }
 
         public ActionResult Logout()
         {
             LogoutDo();
 
-            return this.RedirectHttpOrAjax(OnUserLogoutRedirect(this));
+            return this.RedirectHttpOrAjax(UserLogoutRedirect(this));
         }
 
         public static void LogoutDo()
         {
             var httpContext = System.Web.HttpContext.Current;
 
-            if (OnUserLoggingOut != null)
-                OnUserLoggingOut();
+            if (UserLoggingOut != null)
+                UserLoggingOut();
 
             FormsAuthentication.SignOut();
 
-            var authCookie = httpContext.Request.Cookies[AuthClient.CookieName];
-            if (authCookie != null && authCookie.Value.HasText())
-                httpContext.Response.Cookies[AuthClient.CookieName].Expires = DateTime.UtcNow.AddDays(-10);
-
+            UserTicketClient.RemoveCookie();
+            
             httpContext.Session.Abandon();
         }
     }

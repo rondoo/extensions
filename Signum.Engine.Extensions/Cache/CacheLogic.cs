@@ -36,6 +36,8 @@ namespace Signum.Engine.Cache
 
         public static bool AssertOnStart = true;
 
+        public static bool IsLocalDB = false;
+
         public static void AssertStarted(SchemaBuilder sb)
         {
             sb.AssertDefined(ReflectionTools.GetMethodInfo(() => Start(null)));
@@ -57,7 +59,7 @@ namespace Signum.Engine.Cache
                 sb.SwitchGlobalLazyManager(new CacheGlobalLazyManager());
 
                 sb.Schema.Synchronizing += Synchronize;
-                sb.Schema.Generating += () => Synchronize(null).TryCC(s => s.ToSimple());
+                sb.Schema.Generating += () => Synchronize(null).Try(s => s.ToSimple());
             }
         }
 
@@ -100,7 +102,7 @@ namespace Signum.Engine.Cache
             CacheLogic.OnStart();
 
             Table table = Schema.Current.Table(type);
-            DatabaseName db = table.Name.Schema.TryCC(s => s.Database);
+            DatabaseName db = table.Name.Schema.Try(s => s.Database);
 
             SqlConnector subConnector = ((SqlConnector)Connector.Current).ForDatabase(db);
 
@@ -167,30 +169,32 @@ namespace Signum.Engine.Cache
 
                 using (Connector.Override(sub))
                 {
-
-                    string currentUser = (string)Executor.ExecuteScalar("select SYSTEM_USER");
-
-                    AssertNonIntegratedSecurity(currentUser);
-
                     string databaseName = sub.DatabaseName();
 
-                    var serverPrincipalName = (from db in Database.View<SysDatabases>()
-                                               where db.name == databaseName
-                                               join spl in Database.View<SysServerPrincipals>().DefaultIfEmpty() on db.owner_sid equals spl.sid
-                                               select spl.name).Single();
+                    if (!IsLocalDB)
+                    {
+                        string currentUser = (string)Executor.ExecuteScalar("select SYSTEM_USER");
+
+                        AssertNonIntegratedSecurity(currentUser);
+
+                        var serverPrincipalName = (from db in Database.View<SysDatabases>()
+                                                   where db.name == databaseName
+                                                   join spl in Database.View<SysServerPrincipals>().DefaultIfEmpty() on db.owner_sid equals spl.sid
+                                                   select spl.name).Single();
 
 
-                    if (currentUser != serverPrincipalName)
-                        commands.Add(new SqlPreCommandSimple("ALTER AUTHORIZATION ON DATABASE::{0} TO {2}".Formato(databaseName, serverPrincipalName, currentUser)));
+                        if (currentUser != serverPrincipalName)
+                            commands.Add(new SqlPreCommandSimple("ALTER AUTHORIZATION ON DATABASE::{0} TO [{2}]".Formato(databaseName, serverPrincipalName, currentUser)));
 
 
-                    var databasePrincipalName = (from db in Database.View<SysDatabases>()
-                                                 where db.name == databaseName
-                                                 join dpl in Database.View<SysDatabasePrincipals>().DefaultIfEmpty() on db.owner_sid equals dpl.sid
-                                                 select dpl.name).Single();
+                        var databasePrincipalName = (from db in Database.View<SysDatabases>()
+                                                     where db.name == databaseName
+                                                     join dpl in Database.View<SysDatabasePrincipals>().DefaultIfEmpty() on db.owner_sid equals dpl.sid
+                                                     select dpl.name).Single();
 
-                    if (!databasePrincipalName.HasText() || databasePrincipalName != "dbo")
-                        commands.Add(new SqlPreCommandSimple("ALTER AUTHORIZATION ON DATABASE::{0} TO {2}".Formato(databaseName, databasePrincipalName.DefaultText("Unknown"), currentUser)));
+                        if (!databasePrincipalName.HasText() || databasePrincipalName != "dbo")
+                            commands.Add(new SqlPreCommandSimple("ALTER AUTHORIZATION ON DATABASE::{0} TO [{2}]".Formato(databaseName, databasePrincipalName.DefaultText("Unknown"), currentUser)));
+                    }
 
                     var enabled = Database.View<SysDatabases>().Where(db => db.name == databaseName).Select(a => a.is_broker_enabled).Single();
 
@@ -290,6 +294,9 @@ namespace Signum.Engine.Cache
 
         private static void AssertNonIntegratedSecurity(string currentUser)
         {
+            if (IsLocalDB)
+                return;
+
             var type = Database.View<SysServerPrincipals>().Where(a => a.name == currentUser).Select(a => a.type_desc).Single();
 
             if (type != "SQL_LOGIN")
@@ -321,7 +328,7 @@ ALTER DATABASE {0} SET NEW_BROKER".Formato(database.TryToString() ?? Connector.C
 
         static SqlPreCommandSimple GetDependencyQuery(ITable table)
         {
-            return new SqlPreCommandSimple("SELECT {0} FROM {1}".Formato(table.Columns.Keys.ToString(c => c.SqlScape(), ", "), table.Name));
+            return new SqlPreCommandSimple("SELECT {0} FROM {1}".Formato(table.Columns.Keys.ToString(c => c.SqlEscape(), ", "), table.Name));
         }
 
         class CacheController<T> : CacheControllerBase<T>, ICacheLogicController
@@ -515,7 +522,7 @@ ALTER DATABASE {0} SET NEW_BROKER".Formato(database.TryToString() ?? Connector.C
             foreach (var stype in connected)
             {
                 hs.Add(stype);
-                controllers[stype].TryDoC(t => t.NotifyDisabled());
+                controllers[stype].TryDo(t => t.NotifyDisabled());
             }
         }
 
@@ -583,7 +590,7 @@ ALTER DATABASE {0} SET NEW_BROKER".Formato(database.TryToString() ?? Connector.C
 
         static void NotifyInvalidateAllConnectedTypes(Type type)
         {
-            var connected = inverseDependencies.IndirectlyRelatedTo(type, includeParentNode: true);
+            var connected = inverseDependencies.IndirectlyRelatedTo(type, includeInitialNode: true);
 
             foreach (var stype in connected)
             {
@@ -644,7 +651,7 @@ ALTER DATABASE {0} SET NEW_BROKER".Formato(database.TryToString() ?? Connector.C
                 case CacheType.Semi: return Color.Pink;
             }
 
-            if (typeof(MultiEnumDN).IsAssignableFrom(type))
+            if (typeof(Symbol).IsAssignableFrom(type))
                 return Color.Orange;
 
             if (cacheHint != null && cacheHint(type))

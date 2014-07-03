@@ -34,6 +34,7 @@ namespace Signum.Entities.Authorization
         [Description("The email must have a value")]
         EmailMustHaveAValue,
         EmailSent,
+        Email,
         EnterTheNewPassword,
         [Description("Entity Group")]
         EntityGroupsAscx_EntityGroup,
@@ -44,13 +45,17 @@ namespace Signum.Entities.Authorization
         ExpiredPassword,
         [Description("Your password has expired. You should change it")]
         ExpiredPasswordMessage,     
-        [Description("Forgot your password? Enter your login email below. We will send you an email with a link to reset your password.")]
-        ForgotYourPassword,
+        [Description("Forgot your password? Enter your login email below.")]
+        ForgotYourPasswordEnterYourPasswordBelow,
+        [Description("We will send you an email with a link to reset your password.")]
+        WeWillSendYouAnEmailWithALinkToResetYourPassword,
         IHaveForgottenMyPassword,
         IncorrectPassword,
         [Description("Introduce your username and password")]
         IntroduceYourUserNameAndPassword,
         InvalidUsernameOrPassword,
+        InvalidUsername,
+        InvalidPassword,
         [Description("New:")]
         Login_New,
         [Description("Password:")]
@@ -116,7 +121,7 @@ namespace Signum.Entities.Authorization
         TheSpecifiedPasswordsDontMatch,
         TheUserStateMustBeDisabled,
      
-        User,
+        Username,
         [Description("Username {0} is not valid")]
         Username0IsNotValid,
         [Description("The user name must have a value")]
@@ -128,6 +133,7 @@ namespace Signum.Entities.Authorization
         YouMustRepeatTheNewPassword,
         [Description("User {0} is disabled")]
         User0IsDisabled,
+SendEmail,
     }
 
     public enum AuthEmailMessage

@@ -1,5 +1,4 @@
 ﻿/// <reference path="../../../../Framework/Signum.Web/Signum/Scripts/globals.ts"/>
-/// <reference path="../../../../Framework/Signum.Web/Signum/Headers/d3/d3.d.ts"/>
 /// <reference path="ChartUtils.ts"/>
 var __extends = this.__extends || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -7,8 +6,9 @@ var __extends = this.__extends || function (d, b) {
     __.prototype = b.prototype;
     d.prototype = new __();
 };
-define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Entities", "Framework/Signum.Web/Signum/Scripts/Finder", "Framework/Signum.Web/Signum/Scripts/Validator", "Framework/Signum.Web/Signum/Scripts/Operations", "ChartUtils", "d3"], function(require, exports, Entities, Finder, Validator, Operations, ChartUtils, d3) {
+define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Entities", "Framework/Signum.Web/Signum/Scripts/Finder", "Framework/Signum.Web/Signum/Scripts/Validator", "Framework/Signum.Web/Signum/Scripts/Operations", "ChartUtils", "colorbrewer", "d3"], function(require, exports, Entities, Finder, Validator, Operations, ChartUtils, colorbrewer, d3) {
     ChartUtils;
+    colorbrewer;
 
     function openChart(prefix, url) {
         Finder.getFor(prefix).then(function (sc) {
@@ -55,7 +55,7 @@ define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Entities", "F
     exports.exportData = exportData;
 
     function getFor(prefix) {
-        return $("#" + SF.compose(prefix, "sfChartBuilderContainer")).SFControl();
+        return prefix.child("sfChartBuilderContainer").get().SFControl();
     }
     exports.getFor = getFor;
     ;
@@ -66,101 +66,98 @@ define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Entities", "F
             _super.apply(this, arguments);
         }
         ChartBuilder.prototype._create = function () {
-            var self = this;
+            var _this = this;
+            this.$chartControl = this.element.closest(".sf-chart-control");
 
-            this.$chartControl = self.element.closest(".sf-chart-control");
+            this.filterBuilder = new Finder.FilterBuilder(this.prefix.child("tblFilterBuilder").get(), this.options.prefix, this.options.webQueryName, this.$chartControl.attr("data-add-filter-url"));
 
-            this.filterBuilder = new Finder.FilterBuilder($(this.pf("tblFilterBuilder")), this.options.prefix, this.options.webQueryName, this.$chartControl.attr("data-add-filter-url"));
+            $(document).on("click", ".sf-chart-img", function (e) {
+                var img = $(e.currentTarget);
+                img.closest(".sf-chart-type").find(".sf-chart-type-value").val(img.attr("data-related"));
 
-            $(document).on("click", ".sf-chart-img", function () {
-                var $this = $(this);
-                $this.closest(".sf-chart-type").find(".ui-widget-header .sf-chart-type-value").val($this.attr("data-related"));
-
-                var $resultsContainer = self.$chartControl.find(".sf-search-results-container");
-                if ($this.hasClass("sf-chart-img-equiv")) {
+                var $resultsContainer = _this.$chartControl.find(".sf-search-results-container");
+                if (img.hasClass("sf-chart-img-equiv")) {
                     if ($resultsContainer.find("svg").length > 0) {
-                        self.reDrawOnUpdateBuilder = true;
+                        _this.reDrawOnUpdateBuilder = true;
                     }
                 } else {
                     $resultsContainer.html("");
                 }
 
-                self.updateChartBuilder();
+                _this.updateChartBuilder();
             });
 
-            $(document).on("change", ".sf-chart-group-trigger", function () {
-                self.element.find(".sf-chart-group-results").val($(this).is(":checked").toString());
-                self.updateChartBuilder();
+            $(document).on("change", ".sf-chart-group-trigger", function (e) {
+                _this.element.find(".sf-chart-group-results").val($(e.currentTarget).is(":checked").toString());
+                _this.updateChartBuilder();
             });
 
-            $(document).on("click", ".sf-chart-token-config-trigger", function () {
-                $(this).closest(".sf-chart-token").next().toggle();
+            $(document).on("click", ".sf-chart-token-config-trigger", function (e) {
+                $(e.currentTarget).closest(".sf-chart-token").next().toggle();
             });
 
-            $(document).on("change", ".sf-query-token select", function () {
-                var $this = $(this);
-                var id = $this.attr("id");
-                Finder.QueryTokenBuilder.clearChildSubtokenCombos($this, id.before("_ddlTokens_"), parseInt(id.after("_ddlTokens_")));
-                self.updateChartBuilder($this.closest("tr").attr("data-token"));
+            $(document).on("change", ".sf-query-token select", function (e) {
+                var token = $(e.currentTarget);
+                var id = token.attr("id");
+                Finder.QueryTokenBuilder.clearChildSubtokenCombos(token, id.before("_ddlTokens_"), parseInt(id.after("_ddlTokens_")));
+                _this.updateChartBuilder(token.closest("tr").attr("data-token"));
             });
 
             $(this.$chartControl).on("change", ".sf-chart-redraw-onchange", function () {
-                self.reDraw();
+                _this.reDraw();
             });
 
             $(document).on("click", ".sf-chart-draw", function (e) {
                 e.preventDefault();
-                var $this = $(this);
-                $.ajax({
-                    url: $this.attr("data-url"),
-                    data: self.requestData(),
-                    success: function (result) {
-                        if (typeof result === "object") {
-                            if (typeof result.ModelState != "undefined") {
-                                var modelState = result.ModelState;
-                                Validator.showErrors({}, modelState);
-                                SF.Notify.error(lang.signum.error, 2000);
-                            }
-                        } else {
-                            Validator.showErrors({}, null);
-                            self.$chartControl.find(".sf-search-results-container").html(result);
-                            SF.triggerNewContent(self.$chartControl.find(".sf-search-results-container"));
-                            self.initOrders();
-                            self.reDraw();
+                var drawBtn = $(e.currentTarget);
+                SF.ajaxPost({
+                    url: drawBtn.attr("data-url"),
+                    data: _this.requestData()
+                }).then(function (result) {
+                    if (typeof result === "object") {
+                        if (typeof result.ModelState != "undefined") {
+                            var modelState = result.ModelState;
+                            Validator.showErrors({}, modelState);
+                            SF.Notify.error(lang.signum.error, 2000);
                         }
+                    } else {
+                        Validator.showErrors({}, null);
+                        _this.$chartControl.find(".sf-search-results-container").html(result);
+                        _this.initOrders();
+                        _this.reDraw();
                     }
                 });
             });
 
             window.changeTextArea = function (value, runtimeInfo) {
                 if ($("#ChartScript_sfRuntimeInfo").val() == runtimeInfo) {
-                    var $textArea = self.element.find("textarea.sf-chart-currentScript");
+                    var $textArea = _this.element.find("textarea.sf-chart-currentScript");
 
                     $textArea.val(value);
-                    self.reDraw();
+                    _this.reDraw();
                 }
             };
 
             window.getExceptionNumber = function () {
-                if (self.exceptionLine == null || self.exceptionLine == undefined)
+                if (_this.exceptionLine == null || _this.exceptionLine == undefined)
                     return null;
 
-                var temp = self.exceptionLine;
-                self.exceptionLine = null;
+                var temp = _this.exceptionLine;
+                _this.exceptionLine = null;
                 return temp;
             };
 
             $(document).on("click", ".sf-chart-script-edit", function (e) {
                 e.preventDefault();
 
-                var $textArea = self.element.find("textarea.sf-chart-currentScript");
+                var $textArea = _this.element.find("textarea.sf-chart-currentScript");
 
                 var win = window.open($textArea.data("url"));
             });
 
-            $(document).on("mousedown", this.pf("sfFullScreen"), function (e) {
+            $(document).on("mousedown", this.prefix.child("sfFullScreen"), function (e) {
                 e.preventDefault();
-                self.fullScreen(e);
+                _this.fullScreen(e);
             });
         };
 
@@ -175,22 +172,20 @@ define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Entities", "F
         };
 
         ChartBuilder.prototype.updateChartBuilder = function (tokenChanged) {
+            var _this = this;
             var $chartBuilder = this.$chartControl.find(".sf-chart-builder");
             var data = this.requestData();
             if (!SF.isEmpty(tokenChanged)) {
                 data["lastTokenChanged"] = tokenChanged;
             }
-            var self = this;
             $.ajax({
                 url: $chartBuilder.attr("data-url"),
-                data: data,
-                success: function (result) {
-                    $chartBuilder.replaceWith(result);
-                    SF.triggerNewContent(self.$chartControl.find(".sf-chart-builder"));
-                    if (self.reDrawOnUpdateBuilder) {
-                        self.reDraw();
-                        self.reDrawOnUpdateBuilder = false;
-                    }
+                data: data
+            }).then(function (result) {
+                $chartBuilder.replaceWith(result);
+                if (_this.reDrawOnUpdateBuilder) {
+                    _this.reDraw();
+                    _this.reDrawOnUpdateBuilder = false;
                 }
             });
         };
@@ -216,6 +211,7 @@ define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Entities", "F
         };
 
         ChartBuilder.prototype.reDraw = function () {
+            var _this = this;
             var $chartContainer = this.$chartControl.find(".sf-chart-container");
 
             $chartContainer.html("");
@@ -223,12 +219,11 @@ define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Entities", "F
             var data = $chartContainer.data("json");
             ChartUtils.fillAllTokenValueFuntions(data);
 
-            var self = this;
             $(".sf-chart-redraw-onchange", this.$chartControl).each(function (i, element) {
                 var $element = $(element);
                 var name = $element.attr("id");
-                if (!SF.isEmpty(self.options.prefix)) {
-                    name = name.substring(self.options.prefix.length + 1, name.length);
+                if (!SF.isEmpty(_this.options.prefix)) {
+                    name = name.substring(_this.options.prefix.length + 1, name.length);
                 }
                 var nameParts = name.split('_');
                 if (nameParts.length == 3 && nameParts[0] == "Columns") {
@@ -319,22 +314,16 @@ define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Entities", "F
         };
 
         ChartBuilder.prototype.initOrders = function () {
-            var self = this;
-            $(this.pf("tblResults") + " th").mousedown(function (e) {
-                this.onselectstart = function () {
-                    return false;
-                };
-                return false;
-            }).click(function (e) {
-                self.newSortOrder($(e.target), e.shiftKey);
-                self.$chartControl.find(".sf-chart-draw").click();
+            var _this = this;
+            this.prefix.child("tblResults").get().on("click", "th", function (e) {
+                _this.newSortOrder($(e.currentTarget), e.shiftKey);
+                _this.$chartControl.find(".sf-chart-draw").click();
                 return false;
             });
         };
 
         ChartBuilder.prototype.bindMouseClick = function ($chartContainer) {
-            $chartContainer.find('[data-click]').click(function () {
-                var _this = this;
+            $chartContainer.find('[data-click]').click(function (e) {
                 var url = $chartContainer.attr('data-open-url');
 
                 var win = window.open("about:blank");
@@ -345,7 +334,7 @@ define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Entities", "F
                     options += "&webQueryName=" + cb.options.webQueryName;
                     options += "&orders=" + cb.serializeOrders();
                     options += "&filters=" + cb.filterBuilder.serializeFilters();
-                    options += $(_this).data("click");
+                    options += $(e.currentTarget).data("click");
 
                     win.location.href = (url + (url.indexOf("?") >= 0 ? "&" : "?") + options);
                 });

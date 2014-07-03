@@ -26,6 +26,8 @@ namespace Signum.Windows.Alerts
     /// </summary>
     public partial class AlertsWidget : UserControl, IWidget
     {
+        public decimal Order { get; set; }
+
         public event Action ForceShow;
 
         public static AlertDN CreateAlert(IdentifiableEntity entity)
@@ -36,7 +38,7 @@ namespace Signum.Windows.Alerts
             return new AlertDN
             {
                 Target = entity.ToLite(),
-                CreatedBy = UserDN.Current.ToLite()
+                CreatedBy = UserHolder.Current.ToLite()
             };
         }
 

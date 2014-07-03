@@ -70,11 +70,11 @@ namespace Signum.Windows.UserQueries
                 UserAssetsClient.Start();
                 UserAssetsClient.RegisterExportAssertLink<UserQueryDN>();
 
-                Constructor.Register<UserQueryDN>(elem =>
+                Constructor.Register<UserQueryDN>(ctx =>
                 {
-                    MessageBox.Show(Window.GetWindow(elem),
+                    MessageBox.Show(Window.GetWindow(ctx.Element),
                         ChartMessage._0CanOnlyBeCreatedFromTheSearchWindow.NiceToString().Formato(typeof(UserQueryDN).NicePluralName()),
-                        ChartMessage.UserChart_CreateNew.NiceToString(),
+                        ChartMessage.CreateNew.NiceToString(),
                         MessageBoxButton.OK, MessageBoxImage.Information);
                     return null;
                 });

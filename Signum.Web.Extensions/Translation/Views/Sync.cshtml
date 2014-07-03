@@ -46,7 +46,7 @@ else
 {
     <h2>@ViewBag.Title</h2>
     
-    using (Html.BeginForm())
+    using (Html.BeginForm((TranslationController c) => c.SaveSync(Model.LocalizedAssembly.Assembly.GetName().Name, culture.Name)))
     {
     <table id="results" style="width: 100%; margin: 0px" class="st" 
         data-pluralAndGender="@Url.Action((TranslationController tc) => tc.PluralAndGender())" 
@@ -110,7 +110,7 @@ else
                     {
                         var gd = NaturalLanguageTools.GenderDetectors.TryGetC(locType.Assembly.Culture.TwoLetterISOLanguageName);
 
-                        var list = gd.TryCC(a => a.Pronoms).EmptyIfNull()
+                        var list = gd.Try(a => a.Pronoms).EmptyIfNull()
                                 .Select(pi => new SelectListItem { Value = pi.Gender.ToString(), Text = pi.Singular, Selected = pi.Gender == locType.Gender }).ToList();
 
                         if (typeChanges.Type.Gender == null)
@@ -204,7 +204,7 @@ else
 
 <script>
     $(function () {
-        @(new JsFunction(TranslationClient.Module, "pluralAndGender"))
-        @(new JsFunction(TranslationClient.Module, "editAndRemember", TranslationClient.Translator is ITranslatorWithFeedback))
+        @(TranslationClient.Module["pluralAndGender"]())
+        @(TranslationClient.Module["editAndRemember"](TranslationClient.Translator is ITranslatorWithFeedback))
     });
 </script>

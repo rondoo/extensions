@@ -12,36 +12,26 @@ namespace Signum.Web.UserQueries
 {
     public static class UserQueriesHelper
     {
-        public static MvcHtmlString SearchControl(this HtmlHelper helper, UserQueryDN userQuery, FindOptions findOptions, Context context)
+        public static MvcHtmlString SearchControl(this HtmlHelper helper, UserQueryDN userQuery, FindOptions findOptions, Context context, Action<SearchControl> searchControl = null)
         {
             if (findOptions == null)
                 throw new ArgumentNullException("findOptions");
 
             findOptions.ApplyUserQuery(userQuery);
-            
-            return helper.SearchControl(findOptions, context);
+
+            return helper.SearchControl(findOptions, context, searchControl);
         }
 
-        public static MvcHtmlString SearchControl(this HtmlHelper helper, UserQueryDN userQuery, Context context)
+        public static MvcHtmlString SearchControl(this HtmlHelper helper, UserQueryDN userQuery, Context context, Action<SearchControl> searchControl = null)
         {
             FindOptions findOptions = userQuery.ToFindOptions();
 
-            return helper.SearchControl(userQuery, findOptions, context);
-        }
-
-        public static MvcHtmlString CountSearchControl(this HtmlHelper helper, UserQueryDN userQuery, FindOptions findOptions, Action<CountSearchControl> settinsModifier)
-        {
-            if (findOptions == null)
-                throw new ArgumentNullException("findOptions");
-
-            findOptions.ApplyUserQuery(userQuery);
-
-            return helper.CountSearchControl(findOptions, settinsModifier);
+            return helper.SearchControl(userQuery, findOptions, context, searchControl);
         }
 
         public static MvcHtmlString QueryTokenDNBuilder(this HtmlHelper helper, TypeContext<QueryTokenDN> ctx, QueryTokenBuilderSettings settings)
         {
-            if (ctx.Value.TryCC(qt => qt.ParseException) != null)
+            if (ctx.Value.Try(qt => qt.ParseException) != null)
             {
                 HtmlStringBuilder sb = new HtmlStringBuilder();
                 sb.Add(new HtmlTag("div").Class("ui-state-error").SetInnerText(ctx.Value.ParseException.Message).ToHtml());
@@ -51,7 +41,7 @@ namespace Signum.Web.UserQueries
             }
             else
             {
-                return helper.QueryTokenBuilder(ctx.Value.TryCC(ct => ct.Token), ctx, settings);
+                return helper.QueryTokenBuilder(ctx.Value.Try(ct => ct.Token), ctx, settings);
             }
         }
 

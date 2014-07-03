@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -12,13 +12,21 @@ using System.ComponentModel;
 using Signum.Entities.Basics;
 using Signum.Entities.Scheduler;
 using Signum.Entities.Authorization;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 namespace Signum.Entities.Processes
 {
-    [Serializable, EntityKind(EntityKind.SystemString, EntityData.Master)]
-    public class ProcessAlgorithmDN : MultiEnumDN
+    [Serializable]
+    public class ProcessAlgorithmSymbol : Symbol
     {
+        private ProcessAlgorithmSymbol() { } 
 
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public ProcessAlgorithmSymbol([CallerMemberName]string memberName = null) : 
+            base(new StackFrame(1, false), memberName)
+        {
+        }
     }
 
     [Serializable, EntityKind(EntityKind.Main, EntityData.Transactional)]
@@ -26,14 +34,14 @@ namespace Signum.Entities.Processes
     {
         internal ProcessDN() { }
 
-        public ProcessDN(ProcessAlgorithmDN process)
+        public ProcessDN(ProcessAlgorithmSymbol process)
         {
             this.algorithm = process;
         }
 
-        ProcessAlgorithmDN algorithm;
+        ProcessAlgorithmSymbol algorithm;
         [NotNullValidator]
-        public ProcessAlgorithmDN Algorithm
+        public ProcessAlgorithmSymbol Algorithm
         {
             get { return algorithm; }
         }
@@ -42,15 +50,7 @@ namespace Signum.Entities.Processes
         public IProcessDataDN Data
         {
             get { return data; }
-            set { Set(ref data, value, () => Data); }
-        }
-
-        [ImplementedBy(typeof(UserProcessSessionDN))]
-        IProcessSessionDN session;
-        public IProcessSessionDN Session
-        {
-            get { return session; }
-            set { Set(ref session, value, () => Session); }
+            set { Set(ref data, value); }
         }
 
         public const string None = "none";
@@ -61,7 +61,7 @@ namespace Signum.Entities.Processes
         public string MachineName
         {
             get { return machineName; }
-            set { Set(ref machineName, value, () => MachineName); }
+            set { Set(ref machineName, value); }
         }
 
         [SqlDbType(Size = 100), NotNullable]
@@ -70,56 +70,56 @@ namespace Signum.Entities.Processes
         public string ApplicationName
         {
             get { return applicationName; }
-            set { Set(ref applicationName, value, () => ApplicationName); }
+            set { Set(ref applicationName, value); }
         }
 
         ProcessState state;
         public ProcessState State
         {
             get { return state; }
-            set { Set(ref state, value, () => State); }
+            set { Set(ref state, value); }
         }
 
         DateTime creationDate = TimeZoneManager.Now;
         public DateTime CreationDate
         {
             get { return creationDate; }
-            private set { Set(ref creationDate, value, () => CreationDate); }
+            private set { Set(ref creationDate, value); }
         }
 
         DateTime? plannedDate;
         public DateTime? PlannedDate
         {
             get { return plannedDate; }
-            set { Set(ref plannedDate, value, () => PlannedDate); }
+            set { Set(ref plannedDate, value); }
         }
 
         DateTime? cancelationDate;
         public DateTime? CancelationDate
         {
             get { return cancelationDate; }
-            set { Set(ref cancelationDate, value, () => CancelationDate); }
+            set { Set(ref cancelationDate, value); }
         }
 
         DateTime? queuedDate;
         public DateTime? QueuedDate
         {
             get { return queuedDate; }
-            set { Set(ref queuedDate, value, () => QueuedDate); }
+            set { Set(ref queuedDate, value); }
         }
 
         DateTime? executionStart;
         public DateTime? ExecutionStart
         {
             get { return executionStart; }
-            set { if (Set(ref executionStart, value, () => ExecutionStart))Notify(() => ExecutionEnd); }
+            set { if (Set(ref executionStart, value))Notify(() => ExecutionEnd); }
         }
 
         DateTime? executionEnd;
         public DateTime? ExecutionEnd
         {
             get { return executionEnd; }
-            set { if (Set(ref executionEnd, value, () => ExecutionEnd))Notify(() => ExecutionStart); }
+            set { if (Set(ref executionEnd, value))Notify(() => ExecutionStart); }
         }
 
         static Expression<Func<ProcessDN, double?>> DurationExpression =
@@ -133,14 +133,14 @@ namespace Signum.Entities.Processes
         public DateTime? SuspendDate
         {
             get { return suspendDate; }
-            set { Set(ref suspendDate, value, () => SuspendDate); }
+            set { Set(ref suspendDate, value); }
         }
 
         DateTime? exceptionDate;
         public DateTime? ExceptionDate
         {
             get { return exceptionDate; }
-            set { Set(ref exceptionDate, value, () => ExceptionDate); }
+            set { Set(ref exceptionDate, value); }
         }
 
         [SqlDbType(Size = int.MaxValue)]
@@ -148,7 +148,7 @@ namespace Signum.Entities.Processes
         public Lite<ExceptionDN> Exception
         {
             get { return exception; }
-            set { Set(ref exception, value, () => Exception); }
+            set { Set(ref exception, value); }
         }
 
         decimal? progress;
@@ -156,7 +156,7 @@ namespace Signum.Entities.Processes
         public decimal? Progress
         {
             get { return progress; }
-            set { Set(ref progress, value, () => Progress); }
+            set { Set(ref progress, value); }
         }
 
         static StateValidator<ProcessDN, ProcessState> stateValidator = new StateValidator<ProcessDN, ProcessState>
@@ -215,31 +215,24 @@ namespace Signum.Entities.Processes
 
     }
 
-    public interface IProcessSessionDN : IIdentifiable
-    {
-    }
-
     [Serializable, EntityKind(EntityKind.System, EntityData.Transactional)]
-    public class UserProcessSessionDN : Entity, IProcessSessionDN
+    public class UserProcessSessionMixin : MixinEntity
     {
-        Lite<UserDN> user;
-        public Lite<UserDN> User
+        UserProcessSessionMixin(IdentifiableEntity mainEntity, MixinEntity next)
+            : base(mainEntity, next)
+        {
+        }
+
+        Lite<IUserDN> user = UserHolder.Current.ToLite();
+        public Lite<IUserDN> User
         {
             get { return user; }
-            set { Set(ref user, value, () => User); }
+            set { Set(ref user, value); }
         }
 
-        public static UserProcessSessionDN CreateCurrent()
+        protected override void CopyFrom(MixinEntity mixin, object[] args)
         {
-            return new UserProcessSessionDN
-            {
-                User = UserDN.Current.ToLite(),
-            };
-        }
-
-        public override string ToString()
-        {
-            return GetType().NiceName() + ":" + user.TryToString();
+            this.User = ((UserProcessSessionMixin)mixin).User;
         }
     }
 
@@ -256,19 +249,19 @@ namespace Signum.Entities.Processes
         Error,
     }
 
-    public enum ProcessOperation
+    public static class ProcessOperation
     {
-        Plan,
-        Save,
-        Cancel,
-        Execute,
-        Suspend,
-        Retry,
+        public static readonly ExecuteSymbol<ProcessDN> Plan = OperationSymbol.Execute<ProcessDN>();
+        public static readonly ExecuteSymbol<ProcessDN> Save = OperationSymbol.Execute<ProcessDN>();
+        public static readonly ExecuteSymbol<ProcessDN> Cancel = OperationSymbol.Execute<ProcessDN>();
+        public static readonly ExecuteSymbol<ProcessDN> Execute = OperationSymbol.Execute<ProcessDN>();
+        public static readonly ExecuteSymbol<ProcessDN> Suspend = OperationSymbol.Execute<ProcessDN>();
+        public static readonly ConstructSymbol<ProcessDN>.From<ProcessDN> Retry = OperationSymbol.Construct<ProcessDN>.From<ProcessDN>();
     }
 
-    public enum ProcessPermission
+    public static class ProcessPermission
     {
-        ViewProcessPanel
+        public static readonly PermissionSymbol ViewProcessPanel = new PermissionSymbol();
     }
 
     public enum ProcessMessage
@@ -293,7 +286,7 @@ namespace Signum.Entities.Processes
         public Lite<IProcessLineDataDN> Line
         {
             get { return line; }
-            set { Set(ref line, value, () => Line); }
+            set { Set(ref line, value); }
         }
 
         [NotNullable]
@@ -302,7 +295,7 @@ namespace Signum.Entities.Processes
         public Lite<ProcessDN> Process
         {
             get { return process; }
-            set { Set(ref process, value, () => Process); }
+            set { Set(ref process, value); }
         }
 
         [NotNullable]
@@ -311,13 +304,7 @@ namespace Signum.Entities.Processes
         public Lite<ExceptionDN> Exception
         {
             get { return exception; }
-            set { Set(ref exception, value, () => Exception); }
+            set { Set(ref exception, value); }
         }
     }
-
-    public enum ProcessExceptionOperation
-    {
-        Save
-    }
-
 }
