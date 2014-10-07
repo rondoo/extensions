@@ -10,7 +10,7 @@ using System.Reflection;
 namespace Signum.Entities.Authorization
 {
     [Serializable, EntityKind(EntityKind.System, EntityData.Master)]
-    public class RuleDN<R, A> : IdentifiableEntity
+    public class RuleDN<R, A> : Entity
         where R: IdentifiableEntity
     {
         Lite<RoleDN> role;
@@ -63,7 +63,7 @@ namespace Signum.Entities.Authorization
     [Serializable]
     public class RuleTypeDN : RuleDN<TypeDN, TypeAllowed> 
     {
-        [ValidateChildProperty, NotNullable]
+        [ValidateChildProperty, NotNullable, PreserveOrder]
         MList<RuleTypeConditionDN> conditions = new MList<RuleTypeConditionDN>();
         public MList<RuleTypeConditionDN> Conditions
         {
@@ -73,7 +73,7 @@ namespace Signum.Entities.Authorization
     }
 
     [Serializable]
-    public class RuleTypeConditionDN : EmbeddedEntity, IEquatable<RuleTypeConditionDN> , IOrderedEntity
+    public class RuleTypeConditionDN : EmbeddedEntity, IEquatable<RuleTypeConditionDN> 
     {
         TypeConditionSymbol condition;
         [NotNullValidator]
@@ -88,13 +88,6 @@ namespace Signum.Entities.Authorization
         {
             get { return allowed; }
             set { Set(ref allowed, value); }
-        }
-
-        int order;
-        int IOrderedEntity.Order
-        {
-            get { return order; }
-            set { Set(ref order, value); }
         }
 
         public bool Equals(RuleTypeConditionDN other)

@@ -124,6 +124,7 @@ define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Finder", "Fra
 
     function updateHtmlEditorTextArea(idTargetTextArea) {
         CKEDITOR.instances[idTargetTextArea].updateElement();
+        SF.setHasChanges(idTargetTextArea.get());
     }
     ;
 
@@ -256,7 +257,7 @@ define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Finder", "Fra
     }
     exports.activateIFrame = activateIFrame;
 
-    function createMailFromTemplate(options, findOptions, url) {
+    function createMailFromTemplate(options, event, findOptions, url) {
         Finder.find(findOptions).then(function (entity) {
             if (entity == null)
                 return;
@@ -264,7 +265,7 @@ define(["require", "exports", "Framework/Signum.Web/Signum/Scripts/Finder", "Fra
             Operations.constructFromDefault($.extend({
                 keys: entity.runtimeInfo.key(),
                 controllerUrl: url
-            }, options));
+            }, options), event);
         });
     }
     exports.createMailFromTemplate = createMailFromTemplate;

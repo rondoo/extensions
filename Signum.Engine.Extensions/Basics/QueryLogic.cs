@@ -10,7 +10,6 @@ using System.Reflection;
 using Signum.Entities.DynamicQuery;
 using Signum.Entities;
 using Signum.Utilities.Reflection;
-using Signum.Entities.Reports;
 using Signum.Entities.UserQueries;
 
 namespace Signum.Engine.Basics
@@ -39,7 +38,7 @@ namespace Signum.Engine.Basics
             if (sb.NotDefined(MethodInfo.GetCurrentMethod()))
             {
                 // QueryManagers = queryManagers;
-                sb.Schema.Initializing[InitLevel.Level0SyncEntities] += () =>
+                sb.Schema.Initializing += () =>
                 {
                     queryNamesLazy.Load();
 

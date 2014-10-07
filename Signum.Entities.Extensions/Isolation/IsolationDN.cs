@@ -8,7 +8,7 @@ using Signum.Utilities;
 
 namespace Signum.Entities.Isolation
 {
-    [Serializable, EntityKind(EntityKind.String, EntityData.Master)]
+    [Serializable, EntityKind(EntityKind.String, EntityData.Master, IsLowPopulation=true)]
     public class IsolationDN : Entity
     {
         [NotNullable, SqlDbType(Size = 100), UniqueIndex]
@@ -33,31 +33,51 @@ namespace Signum.Entities.Isolation
             set { DefaultVariable.Value = value; }
         }
 
-        public static readonly ThreadVariable<Lite<IsolationDN>> CurrentThreadVariable = Statics.ThreadVariable<Lite<IsolationDN>>("CurrentIsolation");
+        public static readonly ThreadVariable<Tuple<Lite<IsolationDN>>> CurrentThreadVariable = Statics.ThreadVariable<Tuple<Lite<IsolationDN>>>("CurrentIsolation");
 
-        public static IDisposable OverrideIfNecessary(Lite<IsolationDN> isolation)
+        public static IDisposable Override(Lite<IsolationDN> isolation)
         {
             if (isolation == null)
                 return null;
 
-            if (IsolationDN.Current != null)
-                return null;
+            var curr = IsolationDN.Current;
+            if (curr != null)
+            {
+                if (curr.Is(isolation))
+                    return null;
 
-            return Override(isolation);
+                throw new InvalidOperationException("Trying to change isolation from {0} to {1}".Formato(curr, isolation));
+            }
+
+            return UnsafeOverride(isolation);
         }
 
-        public static IDisposable Override(Lite<IsolationDN> isolation)
+        public static IDisposable Disable()
         {
-            var old = CurrentThreadVariable.Value; 
+            return UnsafeOverride(null);
+        }
 
-            CurrentThreadVariable.Value = isolation;
+        static IDisposable UnsafeOverride(Lite<IsolationDN> isolation)
+        {
+            var old = CurrentThreadVariable.Value;
 
-            return new Disposable(() => CurrentThreadVariable.Value = old); 
+            CurrentThreadVariable.Value = Tuple.Create(isolation);
+
+            return new Disposable(() => CurrentThreadVariable.Value = old);
         }
 
         public static Lite<IsolationDN> Current
         {
-            get { return CurrentThreadVariable.Value ?? Default; }
+            get
+            {
+
+                var tuple = CurrentThreadVariable.Value;
+
+                if (tuple != null)
+                    return tuple.Item1;
+
+                return Default;
+            }
         }
     }
 
@@ -70,7 +90,9 @@ namespace Signum.Entities.Isolation
     {
         [Description("Entity {0} has isolation {1} but current isolation is {2}")]
         Entity0HasIsolation1ButCurrentIsolationIs2,
-        SelectAnIsolation
+        SelectAnIsolation,
+        [Description("Entity '{0}' has isolation {1} but entity '{2}' has isolation {3}")]
+        Entity0HasIsolation1ButEntity2HasIsolation3
     }
 
     [Serializable]
@@ -80,9 +102,8 @@ namespace Signum.Entities.Isolation
         {
         }
 
-        [NotNullable, AttachToAllUniqueIndexes]
-        Lite<IsolationDN> isolation = IsolationDN.Current;
-        [NotNullValidator]
+        [NotNullable, AttachToUniqueIndexes]
+        Lite<IsolationDN> isolation = IsRetrieving ? null : IsolationDN.Current;
         public Lite<IsolationDN> Isolation
         {
             get { return isolation; }

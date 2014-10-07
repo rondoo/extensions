@@ -126,6 +126,7 @@ function changeButtonState($button: JQuery, disablingMessage?: string) {
 
 function updateHtmlEditorTextArea(idTargetTextArea: string) {
     CKEDITOR.instances[idTargetTextArea].updateElement();
+    SF.setHasChanges(idTargetTextArea.get());
 };
 
 export function initHtmlEditor(idTargetTextArea: string, culture: string) {
@@ -261,7 +262,7 @@ export function activateIFrame($iframe: JQuery) {
 }
 
 
-export function createMailFromTemplate(options: Operations.EntityOperationOptions, findOptions: Finder.FindOptions, url: string) {
+export function createMailFromTemplate(options: Operations.EntityOperationOptions, event : MouseEvent, findOptions: Finder.FindOptions, url: string) {
     Finder.find(findOptions).then(entity => {
         if (entity == null)
             return;
@@ -269,7 +270,7 @@ export function createMailFromTemplate(options: Operations.EntityOperationOption
         Operations.constructFromDefault($.extend({
             keys: entity.runtimeInfo.key(),
             controllerUrl: url
-        }, options));
+        }, options), event);
     });
 }
 
