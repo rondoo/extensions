@@ -21,6 +21,9 @@ namespace Signum.Web.Notes
         {
             if (Navigator.Manager.NotDefined(MethodInfo.GetCurrentMethod()))
             {
+                if (types == null)
+                    throw new ArgumentNullException("types");
+
                 Navigator.RegisterArea(typeof(NoteClient));
 
                 Navigator.AddSettings(new List<EntitySettings>
@@ -38,7 +41,7 @@ namespace Signum.Web.Notes
                 WidgetsHelper.GetWidget += WidgetsHelper_GetWidget;
                 OperationClient.AddSettings(new List<OperationSettings>
                 {
-                    new EntityOperationSettings(NoteOperation.CreateNoteFromEntity) 
+                    new EntityOperationSettings<IdentifiableEntity>(NoteOperation.CreateNoteFromEntity) 
                     { 
                         IsVisible  = _ => false
                     }
@@ -55,7 +58,7 @@ namespace Signum.Web.Notes
             if (!Types.Contains(ie.GetType()))
                 return null;
 
-            if (!Navigator.IsFindable(typeof(NoteDN)))
+            if (!Finder.IsFindable(typeof(NoteDN)))
                 return null;
 
             return NoteWidgetHelper.CreateWidget(ctx);

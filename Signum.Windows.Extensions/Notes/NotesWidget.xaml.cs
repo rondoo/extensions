@@ -28,8 +28,6 @@ namespace Signum.Windows.Notes
     /// </summary>
     public partial class NotesWidget : UserControl, IWidget
     {
-        public decimal Order { get; set; }
-
         public event Action ForceShow;
 
         public static NoteDN CreateNote(IdentifiableEntity entity)
@@ -101,7 +99,7 @@ namespace Signum.Windows.Notes
                 eo.ColumnOptionsMode = ColumnOptionsMode.Remove;
             }
 
-            Navigator.Explore(eo);
+            Finder.Explore(eo);
         }
 
         void ViewNote(NoteDN note)

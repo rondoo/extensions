@@ -32,7 +32,7 @@ namespace Signum.Web.Auth
 
         public static event Action UserLogged;
         public static event Action<Controller, UserDN> UserPreLogin;
-        public static event Func<Controller, string> UserLoggedRedirect = c =>
+        public static Func<Controller, string> UserLoggedRedirect = c =>
         {
             string referrer = c.ControllerContext.HttpContext.Request["referrer"];
 
@@ -43,7 +43,7 @@ namespace Signum.Web.Auth
         };
 
         public static event Action UserLoggingOut;
-        public static event Func<Controller, string> UserLogoutRedirect = c =>
+        public static Func<Controller, string> UserLogoutRedirect = c =>
         {
             return RouteHelper.New().Action("Index", "Home");
         };
@@ -66,8 +66,7 @@ namespace Signum.Web.Auth
             ViewData[ViewDataKeys.Title] = AuthMessage.EnterTheNewPassword.NiceToString();
 
             var model = new SetPasswordModel { };
-            TypeContext tc = TypeContextUtilities.UntypedNew(model, this.Prefix());
-            return this.PopupOpen(new PopupViewOptions(tc));
+            return this.PopupView(model, new PopupViewOptions(this.Prefix()));
         }
 
         [AcceptVerbs(HttpVerbs.Post)]

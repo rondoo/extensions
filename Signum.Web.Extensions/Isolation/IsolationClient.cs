@@ -30,16 +30,27 @@ namespace Signum.Web.Isolation
                 Navigator.AddSetting(new EntitySettings<IsolationDN>());
 
                 Constructor.ClientManager.GlobalPreConstructors += ctx =>
-                    !MixinDeclarations.IsDeclared(ctx.Type, typeof(IsolationMixin)) ? null :
+                    (!MixinDeclarations.IsDeclared(ctx.Type, typeof(IsolationMixin)) || IsolationDN.Current != null) ? null :
                     Module["getIsolation"](ClientConstructorManager.ExtraJsonParams, ctx.Prefix,
                     IsolationMessage.SelectAnIsolation.NiceToString(),
-                    IsolationLogic.Isolations.Value.Select(iso => iso.ToChooserOption()));
+                    GetIsolationChooserOptions(ctx.Type));
 
                 //Unnecessary with the filter
                 Constructor.Manager.PreConstructors += ctx =>
                     !MixinDeclarations.IsDeclared(ctx.Type, typeof(IsolationMixin)) ? null :
-                    IsolationDN.OverrideIfNecessary(GetIsolation(ctx.Controller.ControllerContext)); 
+                    IsolationDN.Override(GetIsolation(ctx.Controller.ControllerContext)); 
             }
+        }
+
+        private static IEnumerable<ChooserOption> GetIsolationChooserOptions(Type type)
+        {
+            var isolations = IsolationLogic.Isolations.Value.Select(iso => iso.ToChooserOption());
+            if (IsolationLogic.GetStrategy(type) != IsolationStrategy.Optional)
+                return isolations;
+
+            var list = isolations.ToList();
+            list.Add(new ChooserOption("", "Null"));
+            return list;
         }
 
         public static Lite<IsolationDN> GetIsolation(ControllerContext ctx)
@@ -63,7 +74,7 @@ namespace Signum.Web.Isolation
 
             ViewDataDictionary viewData = filterContext.Controller.ViewData;
 
-            IDisposable isolation = IsolationDN.OverrideIfNecessary(iso);
+            IDisposable isolation = IsolationDN.Override(iso);
             if (isolation != null)
                 viewData.Add(Key, isolation);
 
@@ -93,7 +104,7 @@ namespace Signum.Web.Isolation
                 IdentifiableEntity entity = (model as TypeContext).Try(tc => tc.UntypedValue as IdentifiableEntity) ?? model as IdentifiableEntity;
 
                 if (entity != null)
-                    viewData[Key] = IsolationDN.OverrideIfNecessary(entity.TryIsolation());
+                    viewData[Key] = IsolationDN.Override(entity.TryIsolation());
             }
         }
 

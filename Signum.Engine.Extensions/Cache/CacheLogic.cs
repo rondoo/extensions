@@ -36,6 +36,8 @@ namespace Signum.Engine.Cache
 
         public static bool AssertOnStart = true;
 
+        public static bool DropStaleServices = true;
+
         public static bool IsLocalDB = false;
 
         public static void AssertStarted(SchemaBuilder sb)
@@ -76,10 +78,10 @@ namespace Signum.Engine.Cache
                     if (args.Type != SqlNotificationType.Change)
                         throw new InvalidOperationException(
                             "Problems with SqlDependency (Type : {0} Source : {1} Info : {2}) on query: \r\n{3}"
-                            .Formato(args.Type, args.Source, args.Info, tr.GetMainPreCommand().PlainSql()));
+                            .Formato(args.Type, args.Source, args.Info, tr.MainCommand.PlainSql()));
 
                     if (args.Info == SqlNotificationInfo.PreviousFire)
-                        throw new InvalidOperationException("The same transaction that loaded the data is invalidating it!") { Data = { { "query", tr.GetMainPreCommand().PlainSql() } } };
+                        throw new InvalidOperationException("The same transaction that loaded the data is invalidating it!") { Data = { { "query", tr.MainCommand.PlainSql() } } };
 
                     if (CacheLogic.LogWriter != null)
                         CacheLogic.LogWriter.WriteLine("Change ToListWithInvalidations {0} {1}".Formato(typeof(T).TypeName()), exceptionContext);
@@ -110,7 +112,7 @@ namespace Signum.Engine.Cache
                 CacheLogic.LogWriter.WriteLine("Load ToListWithInvalidations {0} {1}".Formato(typeof(T).TypeName()), exceptionContext);
 
             using (new EntityCache())
-                subConnector.ExecuteDataReaderDependency(tr.GetMainPreCommand(), onChange, CacheLogic.ForceOnStart, fr =>
+                subConnector.ExecuteDataReaderDependency(tr.MainCommand, onChange, CacheLogic.ForceOnStart, fr =>
                     {
                         if (reader == null)
                             reader = new SimpleReader(fr, EntityCache.NewRetriever());
@@ -252,6 +254,21 @@ namespace Signum.Engine.Cache
                     AssertNonIntegratedSecurity(currentUser);
                 }
 
+                if (DropStaleServices)
+                {
+                    //to avoid massive logs with SqlQueryNotificationStoredProcedure
+                    //http://rusanu.com/2007/11/10/when-it-rains-it-pours/
+                    var staleServices = (from s in Database.View<SysServiceQueues>()
+                                         where s.activation_procedure != null && !Database.View<SysProcedures>().Any(p => "[dbo].[" + p.name + "]" == s.activation_procedure)
+                                         select s.name).ToList();
+
+                    foreach (var s in staleServices)
+                    {
+                        new SqlPreCommandSimple("DROP SERVICE [{0}]".Formato(s)).ExecuteNonQuery();
+                        new SqlPreCommandSimple("DROP QUEUE [{0}]".Formato(s)).ExecuteNonQuery();
+                    }
+                }
+
                 foreach (var database in Schema.Current.DatabaseNames())
                 {
                     try
@@ -287,7 +304,7 @@ namespace Signum.Engine.Cache
                 return true;
             }, true);
 
-            AppDomain.CurrentDomain.ProcessExit += (o, a) => Shutdown();
+            AppDomain.CurrentDomain.DomainUnload += (o, a) => Shutdown();
 
             registered = true;
         }
@@ -354,12 +371,14 @@ ALTER DATABASE {0} SET NEW_BROKER".Formato(database.TryToString() ?? Connector.C
                 cachedTable = new CachedTable<T>(this, new Linq.AliasGenerator(), null, null);
             }
 
-            void UnsafeInsert(IQueryable query, LambdaExpression constructor, IQueryable<T> entityQuery)
+            LambdaExpression UnsafeInsert(IQueryable query, LambdaExpression constructor, IQueryable<T> entityQuery)
             {
                 DisableAllConnectedTypesInTransaction(typeof(T));
 
                 Transaction.PostRealCommit -= Transaction_PostRealCommit;
                 Transaction.PostRealCommit += Transaction_PostRealCommit;
+
+                return constructor;
             }
 
             void UnsafeUpdated(IUpdateable update, IQueryable<T> entityQuery)
@@ -452,6 +471,13 @@ ALTER DATABASE {0} SET NEW_BROKER".Formato(database.TryToString() ?? Connector.C
                 AssertEnabled();
 
                 return cachedTable.GetToString(id);
+            }
+
+            public override string TryGetToString(int id)
+            {
+                AssertEnabled();
+
+                return cachedTable.TryGetToString(id);
             }
 
             public override void Complete(T entity, IRetriever retriver)
@@ -642,7 +668,7 @@ ALTER DATABASE {0} SET NEW_BROKER".Formato(database.TryToString() ?? Connector.C
 
         static Color GetColor(Type type, Func<Type, bool> cacheHint)
         {
-            if (type.IsEnumEntity())
+            if (type.IsEnumEntityOrSymbol())
                 return Color.Red;
 
             switch (CacheLogic.GetCacheType(type))

@@ -41,7 +41,7 @@ namespace Signum.Engine.Authorization
                 sb.Schema.EntityEventsGlobal.Retrieved += EntityEventsGlobal_Retrieved;
                 sb.Schema.IsAllowedCallback += Schema_IsAllowedCallback;
 
-                sb.Schema.Initializing[InitLevel.Level0SyncEntities] += () =>
+                sb.Schema.Initializing += () =>
                 {
                     foreach (var type in TypeConditionLogic.Types)
                     {
@@ -117,7 +117,7 @@ namespace Signum.Engine.Authorization
         static void RegisterSchemaEvent<T>(Schema sender)
              where T : IdentifiableEntity
         {
-            sender.EntityEvents<T>().FilterQuery += new FilterQueryEventHandler<T>(TypeAuthLogic_FilterQuery);
+            sender.EntityEvents<T>().FilterQuery += new FilterQueryEventHandler<T>(TypeAuthLogic_FilterQuery<T>);
         }
 
         public static void AssertStarted(SchemaBuilder sb)

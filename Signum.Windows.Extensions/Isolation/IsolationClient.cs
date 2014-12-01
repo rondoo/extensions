@@ -11,12 +11,14 @@ using Signum.Utilities;
 using Signum.Utilities.Reflection;
 using System.Windows.Controls;
 using System.ServiceModel;
+using System.Windows.Threading;
+using Signum.Services;
 
 namespace Signum.Windows.Isolation
 {
     public class IsolationClient
     {
-        public static Func<Window, Lite<IsolationDN>> SelectIsolationInteractively;
+        public static Func<Window, Func<Lite<IsolationDN>, string>, Lite<IsolationDN>> SelectIsolationInteractively;
 
         public static Func<Lite<IsolationDN>, ImageSource> GetIsolationIcon; 
 
@@ -32,7 +34,7 @@ namespace Signum.Windows.Isolation
                 Constructor.Manager.PreConstructors += Constructor_PreConstructors;
 
                 WidgetPanel.GetWidgets += (e, c) => e is IdentifiableEntity && MixinDeclarations.IsDeclared(e.GetType(), typeof(IsolationMixin)) ?
-                    new IsolationWidget() { Order = -1 } : null;
+                    new IsolationWidget().Set(Common.OrderProperty, -1.0) : null;
 
                 List<Lite<IsolationDN>> isolations = null;
 
@@ -42,7 +44,7 @@ namespace Signum.Windows.Isolation
 
                     if (iso != null)
                     {
-                        var msg = new MessageHeader<string>(iso.KeyLong())
+                        var msg = new MessageHeader<string>(iso.Item1.Try(i=>i.KeyLong()))
                             .GetUntypedHeader("CurrentIsolation", "http://www.signumsoftware.com/Isolation");
                         context.OutgoingMessageHeaders.Add(msg);
                     }
@@ -50,13 +52,16 @@ namespace Signum.Windows.Isolation
 
                 GetIsolationIcon = getIsolationIcon;
 
-                SelectIsolationInteractively = owner =>
+                SelectIsolationInteractively = (owner, isValid) =>
                 {
                     if (isolations == null)
                         isolations = Server.RetrieveAllLite<IsolationDN>();
 
+
+                    var isos = isValid == null ? isolations : isolations.Where(i => isValid(i) == null).ToList();
+
                     Lite<IsolationDN> result;
-                    if (SelectorWindow.ShowDialog(isolations, out result,
+                    if (SelectorWindow.ShowDialog(isos, out result,
                         elementIcon: getIsolationIcon,
                         elementText: iso => getIsolationIcon(iso) == null ? iso.ToString() : null,
                         title: IsolationMessage.SelectAnIsolation.NiceToString(),
@@ -67,22 +72,51 @@ namespace Signum.Windows.Isolation
                     return null;
                 };
 
-                Navigator.Manager.TaskNormalWindow += Manager_TaskNormalWindow;
-                Navigator.Manager.TaskSearchWindow += Manager_TaskSearchWindow;
+                Async.OnShowInAnotherThread += Async_OnShowInAnotherThread;
+
+                Finder.Manager.TaskSearchWindow += Manager_TaskSearchWindow;
             }
         }
 
-        static void Manager_TaskNormalWindow(NormalWindow win, ModifiableEntity ent)
+        static Action<Window> Async_OnShowInAnotherThread()
         {
-            var ident = ent as IdentifiableEntity;
-            if (ident != null)
-            {
-                var iso = ident.TryIsolation();
+            if (IsolationDN.Default != null)
+                return win => { };
 
-                if (iso != null)
+            Lite<IsolationDN> prev = IsolationDN.Current;
+
+            return win =>
+            {
+                if (Application.Current.Dispatcher == Dispatcher.CurrentDispatcher)
+                    throw new InvalidOperationException("Isolation can not be set in the main Thread");
+
+                if (win.DataContext != null)
                 {
-                    IsolationDN.CurrentThreadVariable.Value = iso;
+                    SetIsolation(win.DataContext as IdentifiableEntity, prev);
                 }
+                else if (win is NormalWindow)
+                {
+                    ((NormalWindow)win).PreEntityLoaded += (w, args) =>
+                    {
+                        SetIsolation(args.Entity as IdentifiableEntity, prev);
+                        return;
+                    };
+                }
+                else if (prev != null)
+                {
+                    IsolationDN.CurrentThreadVariable.Value = Tuple.Create(prev);
+                }
+            }; 
+        }
+
+        private static void SetIsolation(IdentifiableEntity entity, Lite<IsolationDN> prev)
+        {
+            if (entity == null)
+                IsolationDN.CurrentThreadVariable.Value = Tuple.Create(prev);
+            else
+            {
+                var cur = entity.TryIsolation();
+                IsolationDN.CurrentThreadVariable.Value = Tuple.Create(cur);
             }
         }
 
@@ -101,12 +135,18 @@ namespace Signum.Windows.Isolation
             tb.Before(new Image { Stretch = Stretch.None, SnapsToDevicePixels = true, Source = GetIsolationIcon(iso) }); 
         }
 
+        public static Dictionary<Type, Func<Lite<IsolationDN>, string>> IsValid = new Dictionary<Type, Func<Lite<IsolationDN>, string>>();
+
+        public static void RegisterIsValid<T>(Func<Lite<IsolationDN>, string> isValid) where T : IdentifiableEntity
+        {
+            IsValid[typeof(T)] = isValid;
+        }
 
         static IDisposable Constructor_PreConstructors(ConstructorContext ctx)
         {
             if (MixinDeclarations.IsDeclared(ctx.Type, typeof(IsolationMixin)))
             {
-                Lite<IsolationDN> isolation = GetIsolation(ctx.Element);
+                Lite<IsolationDN> isolation = GetIsolation(ctx, IsValid.TryGetC(ctx.Type));
 
                 if (isolation == null)
                 {
@@ -115,27 +155,44 @@ namespace Signum.Windows.Isolation
                 }
                 ctx.Args.Add(isolation);
 
-                return IsolationDN.OverrideIfNecessary(isolation);
+                return IsolationDN.Override(isolation);
             }
 
             return null;
         }
 
-        public static Lite<IsolationDN> GetIsolation(FrameworkElement element)
+        public static Lite<IsolationDN> GetIsolation(ConstructorContext ctx, Func<Lite<IsolationDN>, string> isValid = null)
         {
-            var result = IsolationDN.Current;
-            if (result != null)
-                return result;
+            var element = ctx.Element;
 
-            var entity = element == null ? null: element.DataContext as IdentifiableEntity;
-            if (entity != null)
+            var result = IsolationDN.Current;
+
+            if (result == null)
             {
-                result = entity.TryIsolation();
-                if (result != null)
-                    return result;
+                var entity = element == null ? null : element.DataContext as IdentifiableEntity;
+                if (entity != null)
+                    result = entity.TryIsolation();
             }
 
-            return SelectIsolationInteractively(element == null ? null : Window.GetWindow(element));
+            if (result == null)
+            {
+                var sc = element as SearchControl ?? (element as SearchWindow).Try(s => s.SearchControl);
+                if (sc != null && ctx.OperationInfo != null && (
+                    ctx.OperationInfo.OperationType == OperationType.ConstructorFrom ||
+                    ctx.OperationInfo.OperationType == OperationType.ConstructorFromMany))
+                    result = Server.Return((IIsolationServer a) => a.GetOnlyIsolation(sc.SelectedItems.ToList()));
+            }
+
+            if (result != null)
+            {
+                var error = isValid == null ? null : isValid(result);
+                if (error != null)
+                    throw new ApplicationException(error);
+
+                return result;
+            }
+
+            return SelectIsolationInteractively(element == null ? null : Window.GetWindow(element), isValid);
         }
     }
 }
