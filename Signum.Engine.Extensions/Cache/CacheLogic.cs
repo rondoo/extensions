@@ -7,7 +7,6 @@ using Signum.Entities;
 using System.Collections;
 using System.Threading;
 using Signum.Utilities;
-using Signum.Engine.Exceptions;
 using System.Collections.Concurrent;
 using Signum.Utilities.DataStructures;
 using Signum.Entities.Reflection;
@@ -27,22 +26,21 @@ using Signum.Engine.Basics;
 using Signum.Engine.Linq;
 using System.Linq.Expressions;
 using System.IO;
+using System.Data;
 
 namespace Signum.Engine.Cache
 {
     public static class CacheLogic
     {
-        public static TextWriter LogWriter;
+        public static bool CheckOwner = false;
 
-        public static bool AssertOnStart = true;
+        public static bool WithSqlDependency { get; internal set; }
 
         public static bool DropStaleServices = true;
 
-        public static bool IsLocalDB = false;
-
         public static void AssertStarted(SchemaBuilder sb)
         {
-            sb.AssertDefined(ReflectionTools.GetMethodInfo(() => Start(null)));
+            sb.AssertDefined(ReflectionTools.GetMethodInfo(() => Start(null, null)));
         }
 
         /// <summary>
@@ -52,7 +50,7 @@ namespace Signum.Engine.Cache
         ///    Change Server Authentication mode and enable SA: http://msdn.microsoft.com/en-us/library/ms188670.aspx
         ///    Change Database ownership to sa: ALTER AUTHORIZATION ON DATABASE::yourDatabase TO sa
         /// </summary>
-        public static void Start(SchemaBuilder sb)
+        public static void Start(SchemaBuilder sb, bool? withSqlDependency = null)
         {
             if (sb.NotDefined(MethodInfo.GetCurrentMethod()))
             {
@@ -60,15 +58,24 @@ namespace Signum.Engine.Cache
 
                 sb.SwitchGlobalLazyManager(new CacheGlobalLazyManager());
 
-                sb.Schema.Synchronizing += Synchronize;
-                sb.Schema.Generating += () => Synchronize(null).Try(s => s.ToSimple());
+                if (withSqlDependency == true && !Connector.Current.SupportsSqlDependency)
+                    throw new InvalidOperationException("Sql Dependency is not supported by the current connection");
+
+                WithSqlDependency = withSqlDependency ?? Connector.Current.SupportsSqlDependency;
+
+                sb.Schema.BeforeDatabaseAccess += StartSqlDependencyAndEnableBrocker;
             }
         }
 
+
+        public static TextWriter LogWriter;
         public static List<T> ToListWithInvalidation<T>(this IQueryable<T> simpleQuery, Type type, string exceptionContext, Action<SqlNotificationEventArgs> invalidation)
         {
+            if (!WithSqlDependency)
+                throw new InvalidOperationException("ToListWithInvalidation requires SqlDependency");
+
             ITranslateResult tr;
-            using (ObjectName.OverrideOptions(new ObjectNameOptions { IncludeDboSchema = true, AvoidDatabaseName = true }))
+            using (ObjectName.OverrideOptions(new ObjectNameOptions { AvoidDatabaseName = true }))
                 tr = ((DbQueryProvider)simpleQuery.Provider).GetRawTranslateResult(simpleQuery.Expression);
 
             OnChangeEventHandler onChange = (object sender, SqlNotificationEventArgs args) =>
@@ -78,13 +85,13 @@ namespace Signum.Engine.Cache
                     if (args.Type != SqlNotificationType.Change)
                         throw new InvalidOperationException(
                             "Problems with SqlDependency (Type : {0} Source : {1} Info : {2}) on query: \r\n{3}"
-                            .Formato(args.Type, args.Source, args.Info, tr.MainCommand.PlainSql()));
+                            .FormatWith(args.Type, args.Source, args.Info, tr.MainCommand.PlainSql()));
 
                     if (args.Info == SqlNotificationInfo.PreviousFire)
                         throw new InvalidOperationException("The same transaction that loaded the data is invalidating it!") { Data = { { "query", tr.MainCommand.PlainSql() } } };
 
                     if (CacheLogic.LogWriter != null)
-                        CacheLogic.LogWriter.WriteLine("Change ToListWithInvalidations {0} {1}".Formato(typeof(T).TypeName()), exceptionContext);
+                        CacheLogic.LogWriter.WriteLine("Change ToListWithInvalidations {0} {1}".FormatWith(typeof(T).TypeName()), exceptionContext);
 
                     invalidation(args);
                 }
@@ -101,7 +108,7 @@ namespace Signum.Engine.Cache
 
             List<T> list = new List<T>();
 
-            CacheLogic.OnStart();
+            CacheLogic.AssertSqlDependencyStarted();
 
             Table table = Schema.Current.Table(type);
             DatabaseName db = table.Name.Schema.Try(s => s.Database);
@@ -109,18 +116,35 @@ namespace Signum.Engine.Cache
             SqlConnector subConnector = ((SqlConnector)Connector.Current).ForDatabase(db);
 
             if (CacheLogic.LogWriter != null)
-                CacheLogic.LogWriter.WriteLine("Load ToListWithInvalidations {0} {1}".Formato(typeof(T).TypeName()), exceptionContext);
+                CacheLogic.LogWriter.WriteLine("Load ToListWithInvalidations {0} {1}".FormatWith(typeof(T).TypeName()), exceptionContext);
 
             using (new EntityCache())
-                subConnector.ExecuteDataReaderDependency(tr.MainCommand, onChange, CacheLogic.ForceOnStart, fr =>
+                subConnector.ExecuteDataReaderDependency(tr.MainCommand, onChange, StartSqlDependencyAndEnableBrocker, fr =>
                     {
                         if (reader == null)
                             reader = new SimpleReader(fr, EntityCache.NewRetriever());
 
                         list.Add(projector(reader));
-                    });
+                    }, CommandType.Text);
 
             return list;
+        }
+
+        public static void ExecuteDataReaderOpionalDependency(this SqlConnector connector, SqlPreCommandSimple preCommand, OnChangeEventHandler change, Action<FieldReader> forEach)
+        {
+            if (WithSqlDependency)
+            {
+                connector.ExecuteDataReaderDependency(preCommand, change, StartSqlDependencyAndEnableBrocker, forEach, CommandType.Text);
+            }
+            else
+            {
+                using (var dr = preCommand.UnsafeExecuteDataReader())
+                {
+                    FieldReader reader = new FieldReader(dr);
+                    while (dr.Read())
+                        forEach(reader);
+                }
+            }
         }
 
         class SimpleReader : IProjectionRow
@@ -155,104 +179,29 @@ namespace Signum.Engine.Cache
             }
         }
 
-
-        public static SqlPreCommand Synchronize(Replacements replacements)
-        {
-            if(ExecutionMode.IsSynchronizeSchemaOnly)
-                return null;
-
-            SqlConnector connector = (SqlConnector)Connector.Current;
-            List<SqlPreCommand> commands = new List<SqlPreCommand>();
-
-            int index = 0; 
-            foreach (var database in Schema.Current.DatabaseNames())
-            {
-                SqlConnector sub = connector.ForDatabase(database);
-
-                using (Connector.Override(sub))
-                {
-                    string databaseName = sub.DatabaseName();
-
-                    if (!IsLocalDB)
-                    {
-                        string currentUser = (string)Executor.ExecuteScalar("select SYSTEM_USER");
-
-                        AssertNonIntegratedSecurity(currentUser);
-
-                        var serverPrincipalName = (from db in Database.View<SysDatabases>()
-                                                   where db.name == databaseName
-                                                   join spl in Database.View<SysServerPrincipals>().DefaultIfEmpty() on db.owner_sid equals spl.sid
-                                                   select spl.name).Single();
-
-
-                        if (currentUser != serverPrincipalName)
-                            commands.Add(new SqlPreCommandSimple("ALTER AUTHORIZATION ON DATABASE::{0} TO [{2}]".Formato(databaseName, serverPrincipalName, currentUser)));
-
-
-                        var databasePrincipalName = (from db in Database.View<SysDatabases>()
-                                                     where db.name == databaseName
-                                                     join dpl in Database.View<SysDatabasePrincipals>().DefaultIfEmpty() on db.owner_sid equals dpl.sid
-                                                     select dpl.name).Single();
-
-                        if (!databasePrincipalName.HasText() || databasePrincipalName != "dbo")
-                            commands.Add(new SqlPreCommandSimple("ALTER AUTHORIZATION ON DATABASE::{0} TO [{2}]".Formato(databaseName, databasePrincipalName.DefaultText("Unknown"), currentUser)));
-                    }
-
-                    var enabled = Database.View<SysDatabases>().Where(db => db.name == databaseName).Select(a => a.is_broker_enabled).Single();
-
-                    if (!enabled)
-                    {
-                        commands.Add(SchemaSynchronizer.DisconnectUsers(databaseName, "spid" + (index++)));
-
-                        commands.Add(new SqlPreCommandSimple("ALTER DATABASE {0} SET ENABLE_BROKER".Formato(databaseName)));
-                        commands.Add(new SqlPreCommandSimple("--ALTER DATABASE {0} SET NEW_BROKER".Formato(databaseName)));
-                    }
-                }
-            }
-
-            var result = commands.Combine(Spacing.Simple);
-
-            if (result == null)
-                return result;
-
-            return SqlPreCommand.Combine(Spacing.Triple,
-                new SqlPreCommandSimple("use master -- Start SqlDepencency sync"),
-                result,
-                new SqlPreCommandSimple("use {0} -- Finish SqlDepencency sync".Formato(connector.DatabaseName())));
-        }
-
-
         static bool started = false;
-        readonly static object startKeyLock = new object();
-        internal static void OnStart()
+        internal static void AssertSqlDependencyStarted()
         {
             if (GloballyDisabled)
                 return;
 
-            if (started)
-                return;
-
-            lock (startKeyLock)
-            {
-                if (started)
-                    return;
-
-                ForceOnStart();
-            }
+            if (!started)
+                throw new InvalidOperationException("call Schema.Current.OnBeforeDatabaseAccess() or Schema.Current.Initialize()  before any database access");
         }
 
-        internal static void ForceOnStart()
+
+        readonly static object startKeyLock = new object();
+        public static void StartSqlDependencyAndEnableBrocker()
         {
+            if (!WithSqlDependency)
+            {
+                started = true;
+                return;
+            }
+
             lock (startKeyLock)
             {
                 SqlConnector connector = (SqlConnector)Connector.Current;
-
-                if (AssertOnStart)
-                {
-                    string currentUser = (string)Executor.ExecuteScalar("select SYSTEM_USER");
-
-                    AssertNonIntegratedSecurity(currentUser);
-                }
 
                 if (DropStaleServices)
                 {
@@ -264,31 +213,76 @@ namespace Signum.Engine.Cache
 
                     foreach (var s in staleServices)
                     {
-                        new SqlPreCommandSimple("DROP SERVICE [{0}]".Formato(s)).ExecuteNonQuery();
-                        new SqlPreCommandSimple("DROP QUEUE [{0}]".Formato(s)).ExecuteNonQuery();
+                        try
+                        {
+                            new SqlPreCommandSimple("DROP SERVICE [{0}]".FormatWith(s)).ExecuteNonQuery();
+                            new SqlPreCommandSimple("DROP QUEUE [{0}]".FormatWith(s)).ExecuteNonQuery();
+                        }
+                        catch { }
                     }
                 }
 
                 foreach (var database in Schema.Current.DatabaseNames())
                 {
+                    SqlConnector sub = connector.ForDatabase(database);
+
                     try
                     {
-                        SqlConnector sub = connector.ForDatabase(database);
+                        try
+                        {
+                            SqlDependency.Start(sub.ConnectionString);
+                        }
+                        catch (InvalidOperationException ex)
+                        {
+                            string databaseName = database.TryToString() ?? Connector.Current.DatabaseName();
 
-                        SqlDependency.Start(sub.ConnectionString);
+                            if (ex.Message.Contains("SQL Server Service Broker"))
+                            {
+                                EnableOrCreateBrocker(databaseName);
+
+                                SqlDependency.Start(sub.ConnectionString);
+                            }
+                        }
                     }
-                    catch (InvalidOperationException ex)
+                    catch (SqlException e)
                     {
-                        if (ex.Message.Contains("SQL Server Service Broker"))
-                            throw EnableBlocker(database);
+                        if (e.Number == 2797)
+                        {
+                            string currentUser = (string)Executor.ExecuteDataTable("SELECT CURRENT_USER").Rows[0][0];
 
-                        throw;
+                            Executor.ExecuteNonQuery("ALTER USER [{0}]  WITH DEFAULT_SCHEMA = dbo;".FormatWith(currentUser));
+
+                            SqlDependency.Start(sub.ConnectionString);
+                        }
+                        else throw e;
                     }
                 }
 
                 RegisterOnShutdown();
 
                 started = true;
+            }
+        }
+
+        static void EnableOrCreateBrocker(string databaseName)
+        {
+            try
+            {
+                using (Transaction tr = Transaction.None())
+                {
+                    Executor.ExecuteNonQuery("ALTER DATABASE {0} SET ENABLE_BROKER WITH ROLLBACK IMMEDIATE;".FormatWith(databaseName));
+
+                    tr.Commit();
+                }
+            }
+            catch (SqlException)
+            {
+                using (Transaction tr = Transaction.None())
+                {
+                    Executor.ExecuteNonQuery("ALTER DATABASE {0} SET NEW_BROKER WITH ROLLBACK IMMEDIATE;".FormatWith(databaseName));
+
+                    tr.Commit();
+                }
             }
         }
 
@@ -309,25 +303,6 @@ namespace Signum.Engine.Cache
             registered = true;
         }
 
-        private static void AssertNonIntegratedSecurity(string currentUser)
-        {
-            if (IsLocalDB)
-                return;
-
-            var type = Database.View<SysServerPrincipals>().Where(a => a.name == currentUser).Select(a => a.type_desc).Single();
-
-            if (type != "SQL_LOGIN")
-                throw new InvalidOperationException("The current login '{0}' is a {1} instead of a SQL_LOGIN. Avoid using Integrated Security with Cache Logic".Formato(currentUser, type));
-        }
-
-        private static InvalidOperationException EnableBlocker(DatabaseName database)
-        {
-            return new InvalidOperationException(@"CacheLogic requires SQL Server Service Broker to be activated. Execute: 
-ALTER DATABASE {0} SET ENABLE_BROKER
-If you have problems, try first: 
-ALTER DATABASE {0} SET NEW_BROKER".Formato(database.TryToString() ?? Connector.Current.DatabaseName()));
-        }
-
         public static void Shutdown()
         {
             if (GloballyDisabled)
@@ -345,11 +320,11 @@ ALTER DATABASE {0} SET NEW_BROKER".Formato(database.TryToString() ?? Connector.C
 
         static SqlPreCommandSimple GetDependencyQuery(ITable table)
         {
-            return new SqlPreCommandSimple("SELECT {0} FROM {1}".Formato(table.Columns.Keys.ToString(c => c.SqlEscape(), ", "), table.Name));
+            return new SqlPreCommandSimple("SELECT {0} FROM {1}".FormatWith(table.Columns.Keys.ToString(c => c.SqlEscape(), ", "), table.Name));
         }
 
         class CacheController<T> : CacheControllerBase<T>, ICacheLogicController
-                where T : IdentifiableEntity
+                where T : Entity
         {
             public CachedTable<T> cachedTable;
             public CachedTableBase CachedTable { get { return cachedTable; } }
@@ -359,58 +334,29 @@ ALTER DATABASE {0} SET NEW_BROKER".Formato(database.TryToString() ?? Connector.C
                 var ee = schema.EntityEvents<T>();
 
                 ee.CacheController = this;
-                ee.Saving += Saving;
-                ee.PreUnsafeDelete += PreUnsafeDelete;
-                ee.PreUnsafeUpdate += UnsafeUpdated;
-                ee.PreUnsafeInsert += UnsafeInsert;
-                ee.PreUnsafeMListDelete += PreUnsafeMListDelete;
-            }         
+                ee.Saving += ident =>
+            {
+                    if (ident.IsGraphModified)
+            {
+                        DisableAndInvalidate(withUpdates: !ident.IsNew);
+            }
+                };
+                ee.PreUnsafeDelete += query => DisableAndInvalidate(withUpdates: false); ;
+                ee.PreUnsafeUpdate += (update, entityQuery) => DisableAndInvalidate(withUpdates: true); ;
+                ee.PreUnsafeInsert += (query, constructor, entityQuery) => { DisableAndInvalidate(withUpdates: constructor.Body.Type.IsInstantiationOf(typeof(MListElement<,>))); return constructor; };
+                ee.PreUnsafeMListDelete += (mlistQuery, entityQuery) => DisableAndInvalidate(withUpdates: true);
+                ee.PreBulkInsert += () => DisableAndInvalidate(withUpdates: false);
+            }
 
             public void BuildCachedTable()
             {
                 cachedTable = new CachedTable<T>(this, new Linq.AliasGenerator(), null, null);
             }
 
-            LambdaExpression UnsafeInsert(IQueryable query, LambdaExpression constructor, IQueryable<T> entityQuery)
+            private void DisableAndInvalidate(bool withUpdates)
             {
-                DisableAllConnectedTypesInTransaction(typeof(T));
-
-                Transaction.PostRealCommit -= Transaction_PostRealCommit;
-                Transaction.PostRealCommit += Transaction_PostRealCommit;
-
-                return constructor;
-            }
-
-            void UnsafeUpdated(IUpdateable update, IQueryable<T> entityQuery)
-            {
-                DisableAllConnectedTypesInTransaction(typeof(T));
-
-                Transaction.PostRealCommit -= Transaction_PostRealCommit;
-                Transaction.PostRealCommit += Transaction_PostRealCommit;
-            }
-
-            void PreUnsafeMListDelete(IQueryable mlistQuery, IQueryable<T> entityQuery)
-            {
-                DisableAllConnectedTypesInTransaction(typeof(T));
-
-                Transaction.PostRealCommit -= Transaction_PostRealCommit;
-                Transaction.PostRealCommit += Transaction_PostRealCommit;
-            }
-
-            void PreUnsafeDelete(IQueryable<T> query)
-            {
-                DisableTypeInTransaction(typeof(T));
-
-                Transaction.PostRealCommit -= Transaction_PostRealCommit;
-                Transaction.PostRealCommit += Transaction_PostRealCommit;
-            }
-
-            void Saving(T ident)
-            {
-                if (ident.IsGraphModified)
+                if (!withUpdates)
                 {
-                    if (ident.IsNew)
-                    {
                         DisableTypeInTransaction(typeof(T));
                     }
                     else
@@ -421,7 +367,6 @@ ALTER DATABASE {0} SET NEW_BROKER".Formato(database.TryToString() ?? Connector.C
                     Transaction.PostRealCommit -= Transaction_PostRealCommit;
                     Transaction.PostRealCommit += Transaction_PostRealCommit;
                 }
-            }
 
             void Transaction_PostRealCommit(Dictionary<string, object> obj)
             {
@@ -437,7 +382,7 @@ ALTER DATABASE {0} SET NEW_BROKER".Formato(database.TryToString() ?? Connector.C
             private void AssertEnabled()
             {
                 if (!Enabled)
-                    throw new InvalidOperationException("Cache for {0} is not enabled".Formato(typeof(T).TypeName()));
+                    throw new InvalidOperationException("Cache for {0} is not enabled".FormatWith(typeof(T).TypeName()));
             }
 
             public event EventHandler<CacheEventArgs> Invalidated;
@@ -459,21 +404,21 @@ ALTER DATABASE {0} SET NEW_BROKER".Formato(database.TryToString() ?? Connector.C
                 cachedTable.ResetAll(forceReset: true);
             }
 
-            public override IEnumerable<int> GetAllIds()
+            public override IEnumerable<PrimaryKey> GetAllIds()
             {
                 AssertEnabled();
 
                 return cachedTable.GetAllIds();
             }
 
-            public override string GetToString(int id)
+            public override string GetToString(PrimaryKey id)
             {
                 AssertEnabled();
 
                 return cachedTable.GetToString(id);
             }
 
-            public override string TryGetToString(int id)
+            public override string TryGetToString(PrimaryKey id)
             {
                 AssertEnabled();
 
@@ -566,9 +511,11 @@ ALTER DATABASE {0} SET NEW_BROKER".Formato(database.TryToString() ?? Connector.C
                 giCacheTable.GetInvoker(type)(sb);
         }
 
-        static GenericInvoker<Action<SchemaBuilder>> giCacheTable = new GenericInvoker<Action<SchemaBuilder>>(sb => CacheTable<IdentifiableEntity>(sb));
-        public static void CacheTable<T>(SchemaBuilder sb) where T : IdentifiableEntity
+        static GenericInvoker<Action<SchemaBuilder>> giCacheTable = new GenericInvoker<Action<SchemaBuilder>>(sb => CacheTable<Entity>(sb));
+        public static void CacheTable<T>(SchemaBuilder sb) where T : Entity
         {
+            AssertStarted(sb);
+
             EntityData data = EntityDataOverrides.TryGetS(typeof(T)) ?? EntityKindCache.GetEntityData(typeof(T));
 
             if (data == EntityData.Master)
@@ -609,7 +556,7 @@ ALTER DATABASE {0} SET NEW_BROKER".Formato(database.TryToString() ?? Connector.C
             var controller = controllers.GetOrThrow(type, "{0} is not registered in CacheLogic");
 
             if (controller == null)
-                throw new InvalidOperationException("{0} is just semi cached".Formato(type.TypeName()));
+                throw new InvalidOperationException("{0} is just semi cached".FormatWith(type.TypeName()));
 
             return controller;
         }
@@ -633,6 +580,9 @@ ALTER DATABASE {0} SET NEW_BROKER".Formato(database.TryToString() ?? Connector.C
 
         public static CacheType GetCacheType(Type type)
         {
+            if(!type.IsEntity())
+                throw new ArgumentException("type should be an Entity");
+
             ICacheLogicController controller;
             if (!controllers.TryGetValue(type, out controller))
                 return CacheType.None;
@@ -641,6 +591,11 @@ ALTER DATABASE {0} SET NEW_BROKER".Formato(database.TryToString() ?? Connector.C
                 return CacheType.Semi;
 
             return CacheType.Cached;
+        }
+
+        public static CachedTableBase GetCachedTable(Type type)
+        {
+            return controllers.GetOrThrow(type).CachedTable;
         }
 
         public static void ForceReset()
