@@ -31,7 +31,7 @@ namespace Signum.Engine.Templating
                 () => "Multiple values for column {0}".FormatWith(column.Column.Token.FullKey()));
         }
 
-        class SemiStructuralEqualityComparer : IEqualityComparer<object>
+        internal class SemiStructuralEqualityComparer : IEqualityComparer<object>
         {
             public static readonly SemiStructuralEqualityComparer Comparer = new SemiStructuralEqualityComparer();
 
@@ -121,7 +121,7 @@ namespace Signum.Engine.Templating
         {
             var members = new List<MemberInfo>();
             var type = modelType;
-            foreach (var field in fieldOrPropertyChain.Split('.'))
+            foreach (var field in fieldOrPropertyChain.Trim().Split('.'))
             {
                 var info = (MemberInfo)type.GetField(field, Flags) ??
                            (MemberInfo)type.GetProperty(field, Flags);
@@ -174,7 +174,7 @@ namespace Signum.Engine.Templating
                     if (!(provToken is TokenValueProvider))
                         SafeConsole.WriteLineColor(ConsoleColor.Magenta, "Variable '{0}' is not a Query Token");
 
-                    var part = provToken.Try(a => a.ParsedToken); 
+                    var part = provToken?.ParsedToken; 
 
                     if (part != null && part.QueryToken == null)
                         SafeConsole.WriteLineColor(ConsoleColor.Magenta, "Variable '{0}' is not fixed yet! currently: '{1}'".FormatWith(v, part.String));
@@ -191,7 +191,7 @@ namespace Signum.Engine.Templating
                 Console.WriteLine(" " + remainingText);
 
                 QueryToken token;
-                FixTokenResult result = QueryTokenSynchronizer.FixToken(Replacements, tokenString, out token, QueryDescription, SubTokensOptions.CanElement | SubTokensOptions.CanAnyAll /*not always*/, remainingText, allowRemoveToken: false);
+                FixTokenResult result = QueryTokenSynchronizer.FixToken(Replacements, tokenString, out token, QueryDescription, SubTokensOptions.CanElement | SubTokensOptions.CanAnyAll /*not always*/, remainingText, allowRemoveToken: false, allowReGenerate: ModelType != null);
                 switch (result)
                 {
                     case FixTokenResult.Nothing:
@@ -202,6 +202,7 @@ namespace Signum.Engine.Templating
                         break;
                     case FixTokenResult.SkipEntity:
                     case FixTokenResult.RemoveToken:
+                     case FixTokenResult.ReGenerateEntity:
                         throw new TemplateSyncException(result);
                 }
             }

@@ -18,6 +18,7 @@ using System.Threading.Tasks;
 using System.Net.Mail;
 using Signum.Entities.UserQueries;
 using Signum.Engine.Templating;
+using Signum.Utilities.ExpressionTrees;
 
 namespace Signum.Engine.Mailing
 {
@@ -25,6 +26,7 @@ namespace Signum.Engine.Mailing
     {
         static Expression<Func<IEmailOwnerEntity, IQueryable<NewsletterDeliveryEntity>>> NewsletterDeliveriesExpression =
             eo => Database.Query<NewsletterDeliveryEntity>().Where(d => d.Recipient.RefersTo(eo));
+        [ExpressionField]
         public static IQueryable<NewsletterDeliveryEntity> NewsletterDeliveries(this IEmailOwnerEntity eo)
         {
             return NewsletterDeliveriesExpression.Evaluate(eo);
@@ -32,19 +34,22 @@ namespace Signum.Engine.Mailing
 
         static Expression<Func<NewsletterEntity, IQueryable<NewsletterDeliveryEntity>>> DeliveriesExpression =
             n => Database.Query<NewsletterDeliveryEntity>().Where(nd => nd.Newsletter.RefersTo(n));
+        [ExpressionField]
         public static IQueryable<NewsletterDeliveryEntity> Deliveries(this NewsletterEntity n)
         {
             return DeliveriesExpression.Evaluate(n);
         }
+        
+        public static Func<NewsletterEntity, SmtpConfigurationEntity> GetStmpConfiguration;
 
-        public static void Start(SchemaBuilder sb, DynamicQueryManager dqm, Func<Lite<SmtpConfigurationEntity>> defaultSmtpConfig)
+        public static void Start(SchemaBuilder sb, DynamicQueryManager dqm, Func<NewsletterEntity, SmtpConfigurationEntity> getSmtpConfiguration)
         {
             if (sb.NotDefined(MethodInfo.GetCurrentMethod()))
             {
                 sb.Include<NewsletterEntity>();
                 sb.Include<NewsletterDeliveryEntity>();
 
-                NewsletterEntity.DefaultSmtpConfig = defaultSmtpConfig;
+                NewsletterLogic.GetStmpConfiguration = getSmtpConfiguration;
 
                 ProcessLogic.AssertStarted(sb);
                 ProcessLogic.Register(NewsletterProcess.SendNewsletter, new NewsletterProcessAlgorithm());
@@ -88,19 +93,6 @@ namespace Signum.Engine.Mailing
                 Validator.PropertyValidator((NewsletterEntity news) => news.Subject).StaticPropertyValidation += (sender, pi) => ValidateTokens(sender, sender.Subject);
 
                 sb.Schema.EntityEvents<NewsletterEntity>().PreSaving += Newsletter_PreSaving;
-
-                Validator.PropertyValidator((NewsletterEntity m) => m.SmtpConfig).StaticPropertyValidation += (input, pi) =>
-                {
-                    if (input.SmtpConfig != null)
-                    {
-                        var smtp = input.SmtpConfig.Retrieve();
-
-                        if (smtp.DefaultFrom == null)
-                            return EmailMessageMessage.DefaultFromIsMandatory.NiceToString();
-                    }
-
-                    return null;
-                }; 
             }
         }
 
@@ -142,11 +134,10 @@ namespace Signum.Engine.Mailing
 
             new ConstructFrom<NewsletterEntity>(NewsletterOperation.Clone)
             {
-                ToState = NewsletterState.Created,
+                ToStates = { NewsletterState.Created },
                 Construct = (n, _) => new NewsletterEntity
                 {
                     Name = n.Name,
-                    SmtpConfig = n.SmtpConfig,
                     From = n.From,
                     DisplayFrom = n.DisplayFrom,
                     Query = n.Query,
@@ -160,14 +151,14 @@ namespace Signum.Engine.Mailing
                 AllowsNew = true,
                 Lite = false,
                 FromStates = { NewsletterState.Created, NewsletterState.Saved },
-                ToState = NewsletterState.Saved,
+                ToStates = { NewsletterState.Saved },
                 Execute = (n, _) => n.State = NewsletterState.Saved
             }.Register();
 
             new Execute(NewsletterOperation.AddRecipients)
             {
                 FromStates = { NewsletterState.Saved },
-                ToState = NewsletterState.Saved,
+                ToStates = { NewsletterState.Saved },
                 Execute = (n, args) =>
                 {
                     var p = args.GetArg<List<Lite<IEmailOwnerEntity>>>();
@@ -185,7 +176,7 @@ namespace Signum.Engine.Mailing
             new Execute(NewsletterOperation.RemoveRecipients)
             {
                 FromStates = { NewsletterState.Saved },
-                ToState = NewsletterState.Saved,
+                ToStates = { NewsletterState.Saved },
                 Execute = (n, args) =>
                 {
                     var p = args.GetArg<List<Lite<NewsletterDeliveryEntity>>>();
@@ -309,13 +300,15 @@ namespace Signum.Engine.Mailing
                     {
                         try
                         {
-                            var client = newsletter.SmtpConfig.RetrieveFromCache().GenerateSmtpClient();
+                            var smtpConfig = NewsletterLogic.GetStmpConfiguration(newsletter);
+
+                            var client = smtpConfig.GenerateSmtpClient();
                             var message = new MailMessage();
                             
                             if (newsletter.From.HasText())
                                 message.From = new MailAddress(newsletter.From, newsletter.DisplayFrom);
                             else
-                                message.From = newsletter.SmtpConfig.InDB(smtp => smtp.DefaultFrom).ToMailAddress();
+                                message.From = smtpConfig.DefaultFrom.ToMailAddress();
                             
                             message.To.Add(conf.OverrideEmailAddress.DefaultText(s.Email.Email));
 

@@ -330,23 +330,30 @@ namespace Signum.Windows.Authorization
             set { Set(ref availableConditions, value); }
         }
 
-        public TypeEntity Resource { get; set; }
+        /*Avoid auto-properties*/
+        TypeEntity resource;
+        public TypeEntity Resource => resource;
 
-        public AuthThumbnail? Properties { get; set; }
-        public AuthThumbnail? Operations { get; set; }
-        public AuthThumbnail? Queries { get; set; }
+        AuthThumbnail? properties;
+        public AuthThumbnail? Properties => properties;
+
+        AuthThumbnail? operations;
+        public AuthThumbnail? Operations => operations;
+
+        AuthThumbnail? queries;
+        public AuthThumbnail? Queries => queries;
 
         public TypeRuleBuilder(TypeAllowedRule rule)
         {
             this.allowed = new TypeAllowedBuilder(rule.Allowed.Fallback);
             this.conditions = rule.Allowed.Conditions.Select(c => new TypeConditionRuleBuilder(c.TypeCondition, c.Allowed)).ToMList();
             this.availableConditions = rule.AvailableConditions;
-            this.allowedBase = rule.AllowedBase; 
-            this.Resource = rule.Resource;
+            this.allowedBase = rule.AllowedBase;
+            this.resource = rule.Resource;
 
-            this.Properties = rule.Properties;
-            this.Operations = rule.Operations;
-            this.Queries = rule.Queries;
+            this.properties = rule.Properties;
+            this.operations = rule.Operations;
+            this.queries = rule.Queries;
 
             this.RebindEvents();
         }
@@ -374,7 +381,7 @@ namespace Signum.Windows.Authorization
 
                 AllowedBase = AllowedBase,
                 Allowed = new TypeAllowedAndConditions(Allowed.TypeAllowed, 
-                    Conditions.Select(a=>new TypeConditionRule(a.TypeCondition, a.Allowed.TypeAllowed)).ToReadOnly()),
+                    Conditions.Select(a => new TypeConditionRule(a.TypeCondition, a.Allowed.TypeAllowed.Value)).ToReadOnly()),
 
                 AvailableConditions = this.AvailableConditions,
 
@@ -393,8 +400,8 @@ namespace Signum.Windows.Authorization
                 if (!allowedBase.Fallback.Equals(Allowed.TypeAllowed))
                     return true;
 
-                return !allowedBase.Conditions.SequenceEqual(Conditions.Select(a => 
-                    new TypeConditionRule(a.TypeCondition, a.Allowed.TypeAllowed)));
+                return !allowedBase.Conditions.SequenceEqual(Conditions.Select(a =>
+                    new TypeConditionRule(a.TypeCondition, a.Allowed.TypeAllowed.Value)));
             }
         }
 
@@ -432,35 +439,35 @@ namespace Signum.Windows.Authorization
 
     public class TypeAllowedBuilder : ModelEntity
     {
-        public TypeAllowedBuilder(TypeAllowed typeAllowed)
+        public TypeAllowedBuilder(TypeAllowed? typeAllowed)
         {
             this.typeAllowed = typeAllowed;
         }
 
-        TypeAllowed typeAllowed;
-        public TypeAllowed TypeAllowed { get { return typeAllowed; } }
+        TypeAllowed? typeAllowed;
+        public TypeAllowed? TypeAllowed { get { return typeAllowed; } }
 
         public bool Create
         {
-            get { return typeAllowed.IsActive(TypeAllowedBasic.Create); }
+            get { return typeAllowed.HasValue && typeAllowed.Value.IsActive(TypeAllowedBasic.Create); }
             set { Set(TypeAllowedBasic.Create); }
         }
 
         public bool Modify
         {
-            get { return typeAllowed.IsActive(TypeAllowedBasic.Modify); }
+            get { return typeAllowed.HasValue && typeAllowed.Value.IsActive(TypeAllowedBasic.Modify); }
             set { Set(TypeAllowedBasic.Modify); }
         }
 
         public bool Read
         {
-            get { return typeAllowed.IsActive(TypeAllowedBasic.Read); }
+            get { return typeAllowed.HasValue && typeAllowed.Value.IsActive(TypeAllowedBasic.Read); }
             set { Set(TypeAllowedBasic.Read); }
         }
 
         public bool None
         {
-            get { return typeAllowed.IsActive(TypeAllowedBasic.None); }
+            get { return typeAllowed.HasValue && typeAllowed.Value.IsActive(TypeAllowedBasic.None); }
             set { Set(TypeAllowedBasic.None); }
         }
 
@@ -471,23 +478,23 @@ namespace Signum.Windows.Authorization
 
         private void Set(TypeAllowedBasic typeAllowedBasic)
         {
-            if ((Keyboard.Modifiers & ModifierKeys.Shift) != ModifierKeys.Shift)
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) != ModifierKeys.Shift || typeAllowed == null)
             {
                 typeAllowed = TypeAllowedExtensions.Create(typeAllowedBasic, typeAllowedBasic);
             }
             else
             {
                 int num = GetNum();
-                if (!typeAllowed.IsActive(typeAllowedBasic) && num == 1)
+                if (!typeAllowed.Value.IsActive(typeAllowedBasic) && num == 1)
                 {
-                    var db = typeAllowed.GetDB();
+                    var db = typeAllowed.Value.GetDB();
                     typeAllowed = TypeAllowedExtensions.Create(
                         db > typeAllowedBasic ? db : typeAllowedBasic,
                         db < typeAllowedBasic ? db : typeAllowedBasic);
                 }
-                else if (typeAllowed.IsActive(typeAllowedBasic) && num >= 2)
+                else if (typeAllowed.Value.IsActive(typeAllowedBasic) && num >= 2)
                 {
-                    var other = typeAllowed.GetDB() == typeAllowedBasic ? typeAllowed.GetDB() : typeAllowed.GetUI();
+                    var other = typeAllowed.Value.GetDB() == typeAllowedBasic ? typeAllowed.Value.GetDB() : typeAllowed.Value.GetUI();
                     typeAllowed = TypeAllowedExtensions.Create(other, other);
                 }
             }

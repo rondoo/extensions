@@ -72,13 +72,13 @@ namespace Signum.Engine.Disconnected
 
             var cancelationSource = new CancellationTokenSource();
 
-            UserEntity user = UserEntity.Current;
+            var user = UserHolder.Current;
 
             var token = cancelationSource.Token;
 
             var task = Task.Factory.StartNew(() =>
             {
-                using (AuthLogic.UserSession(user))
+                using (UserHolder.UserSession(user))
                 {
                     OnStartExporting(machine);
                     DisconnectedMachineEntity.Current = machine.ToLite();
@@ -392,7 +392,7 @@ SELECT {3}
                 command + "\r\n" +
                 "SET IDENTITY_INSERT {0} OFF\r\n".FormatWith(newTableName));
 
-            return Executor.ExecuteNonQuery(fullCommand, filter.Try(a => a.Parameters));
+            return Executor.ExecuteNonQuery(fullCommand, filter?.Parameters);
         }
 
         protected virtual SqlPreCommandSimple GetWhere(DisconnectedStrategy<T> pair)

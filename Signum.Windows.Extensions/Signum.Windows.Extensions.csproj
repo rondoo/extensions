@@ -10,7 +10,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Signum.Windows</RootNamespace>
     <AssemblyName>Signum.Windows.Extensions</AssemblyName>
-    <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.6</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{60dc8134-eba5-43b8-bcc9-bb4bc16c2548};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <WarningLevel>4</WarningLevel>
@@ -59,9 +59,9 @@
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Newtonsoft.Json, Version=6.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\packages\Newtonsoft.Json.6.0.8\lib\net45\Newtonsoft.Json.dll</HintPath>
+    <Reference Include="Newtonsoft.Json, Version=8.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\Newtonsoft.Json.8.0.2\lib\net45\Newtonsoft.Json.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="PresentationFramework.Aero" />
     <Reference Include="System" />
@@ -178,9 +178,6 @@
     <Compile Include="Chart\ChartScript.xaml.cs">
       <DependentUpon>ChartScript.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Chart\ChartScriptParameter.xaml.cs">
-      <DependentUpon>ChartScriptParameter.xaml</DependentUpon>
-    </Compile>
     <Compile Include="Chart\UserChart.xaml.cs">
       <DependentUpon>UserChart.xaml</DependentUpon>
     </Compile>
@@ -260,9 +257,6 @@
       <DependentUpon>FilePath.xaml</DependentUpon>
     </Compile>
     <Compile Include="Files\FilePathClient.cs" />
-    <Compile Include="Files\FileRepository.xaml.cs">
-      <DependentUpon>FileRepository.xaml</DependentUpon>
-    </Compile>
     <Compile Include="ExtensionsImageLoader.cs" />
     <Compile Include="Files\ImageFileExtension.cs" />
     <Compile Include="Help\HelpAdorner.cs" />
@@ -344,8 +338,8 @@
     <Compile Include="Scheduler\ScheduleRuleMinutely.xaml.cs">
       <DependentUpon>ScheduleRuleMinutely.xaml</DependentUpon>
     </Compile>
-    <Compile Include="Scheduler\ScheduleRuleHourly.xaml.cs">
-      <DependentUpon>ScheduleRuleHourly.xaml</DependentUpon>
+    <Compile Include="Scheduler\ScheduleRuleMonths.xaml.cs">
+      <DependentUpon>ScheduleRuleMonths.xaml</DependentUpon>
     </Compile>
     <Compile Include="SMS\MultipleSMS.xaml.cs">
       <DependentUpon>MultipleSMS.xaml</DependentUpon>
@@ -410,14 +404,8 @@
       <DependentUpon>ScheduledTask.xaml</DependentUpon>
     </Compile>
     <Compile Include="Scheduler\SchedulerClient.cs" />
-    <Compile Include="Scheduler\ScheduleRuleDaily.xaml.cs">
-      <DependentUpon>ScheduleRuleDaily.xaml</DependentUpon>
-    </Compile>
     <Compile Include="Scheduler\ScheduleRuleWeekDays.xaml.cs">
       <DependentUpon>ScheduleRuleWeekDays.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="Scheduler\ScheduleRuleWeekly.xaml.cs">
-      <DependentUpon>ScheduleRuleWeekly.xaml</DependentUpon>
     </Compile>
     <Compile Include="Shapes\Arrow.cs" />
     <Compile Include="SMS\SMSClient.cs" />
@@ -425,6 +413,7 @@
       <DependentUpon>SMSTemplate.xaml</DependentUpon>
     </Compile>
     <Compile Include="ZoomViewer.cs" />
+    <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
@@ -568,10 +557,6 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
-    <Page Include="Chart\ChartScriptParameter.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
     <Page Include="Chart\UserChart.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
@@ -674,12 +659,6 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="Files\FileRepository.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
     <Page Include="Help\HelpButton.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
@@ -776,7 +755,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="Scheduler\ScheduleRuleHourly.xaml">
+    <Page Include="Scheduler\ScheduleRuleMonths.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
@@ -848,19 +827,7 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
-    <Page Include="Scheduler\ScheduleRuleDaily.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
     <Page Include="Scheduler\ScheduleRuleWeekDays.xaml">
-      <SubType>Designer</SubType>
-      <Generator>MSBuild:Compile</Generator>
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
-    <Page Include="Scheduler\ScheduleRuleWeekly.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
       <Generator>MSBuild:Compile</Generator>

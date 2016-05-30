@@ -33,7 +33,7 @@ namespace Signum.Engine.Mailing
 
             this.queryName = QueryLogic.ToQueryName(template.Query.Key);
             this.qd = DynamicQueryManager.Current.QueryDescription(queryName);
-            this.smtpConfig = template.SmtpConfiguration.Try(SmtpConfigurationLogic.RetrieveFromCache) ?? SmtpConfigurationLogic.DefaultSmtpConfiguration();
+            this.smtpConfig = EmailTemplateLogic.GetSmtpConfiguration == null ? null : EmailTemplateLogic.GetSmtpConfiguration(template);
         }
 
         ResultTable table;
@@ -57,7 +57,7 @@ namespace Signum.Engine.Mailing
                         IsBodyHtml = template.IsBodyHtml,
                         EditableMessage = template.EditableMessage,
                         Template = template.ToLite(),
-                        SmtpConfiguration = template.SmtpConfiguration,
+                        Attachments = template.Attachments.SelectMany(g => EmailTemplateLogic.GenerateAttachment.Invoke(g, template, entity)).ToMList()
                     };
 
                     CultureInfo ci = recipients.Where(a => a.Kind == EmailRecipientKind.To).Select(a => a.OwnerData.CultureInfo).FirstOrDefault().ToCultureInfo();
@@ -65,7 +65,7 @@ namespace Signum.Engine.Mailing
                     EmailTemplateMessageEntity message = template.GetCultureMessage(ci) ?? template.GetCultureMessage(EmailLogic.Configuration.DefaultCulture.ToCultureInfo());
 
                     if (message == null)
-                        throw new InvalidOperationException("Message {0} does not have a message for CultureInfo {0} (or Default)".FormatWith(template, ci));
+                        throw new InvalidOperationException("Message {0} does not have a message for CultureInfo {1} (or Default)".FormatWith(template, ci));
 
                     email.Subject = SubjectNode(message).Print(
                         new EmailTemplateParameters(entity, ci, dicTokenColumn, currentRows)
@@ -133,7 +133,7 @@ namespace Signum.Engine.Mailing
                     {
                         var groups = currentRows.GroupBy(r => (EmailOwnerData)r[owner]);
 
-                        if (groups.Count() == 1 && groups.Single().Key.Try(a => a.Owner) == null)
+                        if (groups.Count() == 1 && groups.Single().Key?.Owner == null)
                             yield break;
                         else
                         {
@@ -192,8 +192,10 @@ namespace Signum.Engine.Mailing
                     recipients.AddRange(systemEmail.GetRecipients());
 
                 if (smtpConfig != null)
-                    recipients.AddRange(smtpConfig.AditionalRecipients.Select(r =>
-                        new EmailOwnerRecipientData(r.EmailOwner.Retrieve().EmailOwnerData) { Kind = r.Kind }));
+                {
+                    recipients.AddRange(smtpConfig.AdditionalRecipients.Where(a => a.EmailOwner == null).Select(r =>
+                        new EmailOwnerRecipientData(new EmailOwnerData { CultureInfo = null, DisplayName = r.DisplayName, Email = r.EmailAddress, Owner = r.EmailOwner }) { Kind = r.Kind }));
+                }
 
                 if (recipients.Any())
                     yield return recipients;
@@ -212,7 +214,7 @@ namespace Signum.Engine.Mailing
 
                         List<EmailOwnerData> groups = currentRows.Select(r => (EmailOwnerData)r[owner]).Distinct().ToList();
 
-                        if (groups.Count == 1 && groups[0].Try(a => a.Owner) == null)
+                        if (groups.Count == 1 && groups[0]?.Email == null)
                             return new List<EmailOwnerRecipientData>();
 
                         return groups.Where(g => g.Email.HasText()).Select(g => new EmailOwnerRecipientData(g) { Kind = tr.Kind }).ToList();
@@ -237,7 +239,7 @@ namespace Signum.Engine.Mailing
 
                 var groups = currentRows.GroupBy(r => (EmailOwnerData)r[owner]).ToList();
 
-                if (groups.Count == 1 && groups[0].Key.Try(e => e.Owner) == null)
+                if (groups.Count == 1 && groups[0].Key?.Email == null)
                 {
                     yield return new List<EmailOwnerRecipientData>();
                 }

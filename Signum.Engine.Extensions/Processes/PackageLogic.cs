@@ -16,6 +16,7 @@ using System.Linq.Expressions;
 using Signum.Utilities;
 using Signum.Entities.Basics;
 using Signum.Engine.Operations;
+using Signum.Utilities.ExpressionTrees;
 
 namespace Signum.Engine.Processes
 {
@@ -23,6 +24,7 @@ namespace Signum.Engine.Processes
     {
         static Expression<Func<PackageEntity, IQueryable<PackageLineEntity>>> LinesExpression =
             p => Database.Query<PackageLineEntity>().Where(pl => pl.Package.RefersTo(p));
+        [ExpressionField]
         public static IQueryable<PackageLineEntity> Lines(this PackageEntity p)
         {
             return LinesExpression.Evaluate(p);
@@ -51,9 +53,10 @@ namespace Signum.Engine.Processes
                         pl.Package,
                         pl.Id,
                         pl.Target,
+                        pl.Result,
                         pl.FinishTime,
                         LastProcess = p,
-                        Exception = pl.Exception(p)
+                        Exception = pl.Exception(p),
                     });
 
 
@@ -178,7 +181,7 @@ namespace Signum.Engine.Processes
         public static void RegisterUserTypeCondition(SchemaBuilder sb, TypeConditionSymbol typeCondition)
         {
             TypeConditionLogic.RegisterCompile<ProcessEntity>(typeCondition,
-                pe => pe.Mixin<UserProcessSessionMixin>().User.RefersTo(UserEntity.Current));
+                pe => pe.User.RefersTo(UserEntity.Current));
 
             TypeConditionLogic.Register<PackageOperationEntity>(typeCondition,
                 po => Database.Query<ProcessEntity>().WhereCondition(typeCondition).Any(pe => pe.Data == po));
@@ -248,11 +251,29 @@ namespace Signum.Engine.Processes
 
             executingProcess.ForEachLine(package.Lines().Where(a => a.FinishTime == null), line =>
             {
-                ((T)(IEntity)line.Target).Delete<T, T>(DeleteSymbol, args);
+                ((T)(IEntity)line.Target).Delete(DeleteSymbol, args);
 
                 line.FinishTime = TimeZoneManager.Now;
                 line.Save();
             });
+        }
+    }
+
+    public class PackageSave<T> : IProcessAlgorithm where T : class, IEntity
+    {
+        public virtual void Execute(ExecutingProcess executingProcess)
+        {
+            PackageEntity package = (PackageEntity)executingProcess.Data;
+
+            var args = package.OperationArgs;
+
+            using (OperationLogic.AllowSave<T>())
+                executingProcess.ForEachLine(package.Lines().Where(a => a.FinishTime == null), line =>
+                {
+                    ((T)(object)line.Target).Save();
+                    line.FinishTime = TimeZoneManager.Now;
+                    line.Save();
+                });
         }
     }
    

@@ -34,6 +34,7 @@ namespace Signum.Engine.SMS
 
         public static Expression<Func<Entity, IQueryable<SMSMessageEntity>>> SMSMessagesExpression =
             e => Database.Query<SMSMessageEntity>().Where(m => m.Referred.RefersTo(e));
+        [ExpressionField]
         public static IQueryable<SMSMessageEntity> SMSMessages(this Entity e)
         {
             return SMSMessagesExpression.Evaluate(e);
@@ -41,7 +42,7 @@ namespace Signum.Engine.SMS
 
         static Expression<Func<SMSSendPackageEntity, IQueryable<SMSMessageEntity>>> SMSMessagesSendExpression =
             e => Database.Query<SMSMessageEntity>().Where(a => a.SendPackage.RefersTo(e));
-        [ExpressionField("SMSMessagesSendExpression")]
+        [ExpressionField]
         public static IQueryable<SMSMessageEntity> SMSMessages(this SMSSendPackageEntity e)
         {
             return SMSMessagesSendExpression.Evaluate(e);
@@ -49,7 +50,7 @@ namespace Signum.Engine.SMS
 
         static Expression<Func<SMSUpdatePackageEntity, IQueryable<SMSMessageEntity>>> SMSMessagesUpdateExpression =
           e => Database.Query<SMSMessageEntity>().Where(a => a.UpdatePackage.RefersTo(e));
-        [ExpressionField("SMSMessagesUpdateExpression")]
+        [ExpressionField]
         public static IQueryable<SMSMessageEntity> SMSMessages(this SMSUpdatePackageEntity e)
         {
             return SMSMessagesUpdateExpression.Evaluate(e);
@@ -341,7 +342,7 @@ namespace Signum.Engine.SMS
                                 select new Combination
                                 {
                                     Name = m.Groups["name"].Value,
-                                    Value = t.GetProperty(m.Groups["name"].Value).Try(fi => fi.GetValue(o, null)).TryToString()
+                                    Value = t.GetProperty(m.Groups["name"].Value)?.Let(fi => fi.GetValue(o, null))?.ToString()
                                 }).ToList();
 
             return CombineText(template, templateMessage, combinations);
@@ -548,7 +549,7 @@ namespace Signum.Engine.SMS
             new ConstructFrom<SMSTemplateEntity>(SMSMessageOperation.CreateSMSFromSMSTemplate)
             {
                 CanConstruct = t => !t.Active ? SmsMessage.TheTemplateMustBeActiveToConstructSMSMessages.NiceToString() : null,
-                ToState = SMSMessageState.Created,
+                ToStates = { SMSMessageState.Created },
                 Construct = (t, args) =>
                 {
                     var defaultCulture = SMSLogic.Configuration.DefaultCulture.ToCultureInfo();
@@ -572,7 +573,7 @@ namespace Signum.Engine.SMS
                 AllowsNew = true,
                 Lite = false,
                 FromStates = { SMSMessageState.Created },
-                ToState = SMSMessageState.Sent,
+                ToStates = { SMSMessageState.Sent },
                 Execute = (m, _) =>
                 {
                     try

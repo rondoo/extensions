@@ -24,20 +24,24 @@ namespace Signum.Engine.Translation
 {
     public static class TranslatedInstanceLogic
     {
-        public static CultureInfo DefaultCulture { get; private set; }
+        static Func<CultureInfo> getDefaultCulture;
+        public static CultureInfo DefaultCulture { get { return getDefaultCulture(); } }
 
         public static Dictionary<Type, Dictionary<PropertyRoute, TraducibleRouteType>> TraducibleRoutes 
             = new Dictionary<Type, Dictionary<PropertyRoute, TraducibleRouteType>>();
         static ResetLazy<Dictionary<CultureInfo, Dictionary<LocalizedInstanceKey, TranslatedInstanceEntity>>> LocalizationCache;
 
-        public static void Start(SchemaBuilder sb, DynamicQueryManager dqm, string defaultCulture)
+        public static void Start(SchemaBuilder sb, DynamicQueryManager dqm, Func<CultureInfo> defaultCulture)
         {
             if (sb.NotDefined(MethodInfo.GetCurrentMethod()))
             {
                 sb.Include<TranslatedInstanceEntity>();
                 sb.AddUniqueIndex<TranslatedInstanceEntity>(ti => new { ti.Culture, ti.PropertyRoute, ti.Instance, ti.RowId });
 
-                DefaultCulture = CultureInfo.GetCultureInfo(defaultCulture);
+                if (defaultCulture == null)
+                    throw new ArgumentNullException("defaultCulture");
+
+                TranslatedInstanceLogic.getDefaultCulture = defaultCulture;
 
                 dqm.RegisterQuery(typeof(TranslatedInstanceEntity), () =>
                     from e in Database.Query<TranslatedInstanceEntity>()
@@ -112,7 +116,7 @@ namespace Signum.Engine.Translation
         {
             var dic = TraducibleRoutes.TryGetC(route.RootType);
 
-            return dic.TryGetS(route); 
+            return dic?.TryGetS(route); 
         }
 
         public static List<TranslatedTypeSummary> TranslationInstancesStatus()
@@ -212,7 +216,7 @@ namespace Signum.Engine.Translation
 
             return (from e in Database.Query<T>()
                     let str = exp.Evaluate(e)
-                    where str != null &&
+                    where str != null && str != "" &&
                     !Database.Query<TranslatedInstanceEntity>().Any(ti =>
                         ti.Instance.RefersTo(e) &
                         ti.PropertyRoute.IsPropertyRoute(pr) &&
@@ -330,7 +334,7 @@ namespace Signum.Engine.Translation
 
             var key = new LocalizedInstanceKey(route, lite, rowId);
 
-            var result = LocalizationCache.Value.TryGetC(CultureInfo.CurrentUICulture).TryGetC(key);
+            var result = LocalizationCache.Value.TryGetC(CultureInfo.CurrentUICulture)?.TryGetC(key);
 
             if (result != null)
                 return result;
@@ -338,7 +342,7 @@ namespace Signum.Engine.Translation
             if (CultureInfo.CurrentUICulture.IsNeutralCulture)
                 return null;
 
-            result = LocalizationCache.Value.TryGetC(CultureInfo.CurrentUICulture.Parent).TryGetC(key);
+            result = LocalizationCache.Value.TryGetC(CultureInfo.CurrentUICulture.Parent)?.TryGetC(key);
 
             if (result != null)
                 return result;
@@ -383,7 +387,7 @@ namespace Signum.Engine.Translation
             {
                 Instance = r.Key.Instance.Key(),
                 Path = r.Key.Route.PropertyString(),
-                RowId = r.Key.RowId.TryToString(),
+                RowId = r.Key.RowId?.ToString(),
                 Original = r.Value.OriginalText,
                 Translated = r.Value.TranslatedText
             }).ToList();
@@ -406,7 +410,7 @@ namespace Signum.Engine.Translation
                         {
                             Instance = ic.Instance.Key(),
                             Path = pr.Key.Route.PropertyString(),
-                            RowId = pr.Key.RowId.TryToString(),
+                            RowId = pr.Key.RowId?.ToString(),
                             Original = pr.Value.GetOrThrow(TranslatedInstanceLogic.DefaultCulture).Original,
                             Translated = null
                         }).ToList();
@@ -434,7 +438,7 @@ namespace Signum.Engine.Translation
                 Culture = culture,
                 Key = new LocalizedInstanceKey(PropertyRoute.Parse(type, cellValues[1]),
                     Lite.Parse<Entity>(cellValues[0]),
-                    cellValues[2].DefaultText(null).Try(s => PrimaryKey.Parse(s, type))),
+                    cellValues[2].DefaultText(null)?.Let(s => PrimaryKey.Parse(s, type))),
                 OriginalText = cellValues[3],
                 TranslatedText = cellValues[4]
             });
@@ -464,7 +468,7 @@ namespace Signum.Engine.Translation
 
                 var result = (from rc in routeConflicts
                               from c in cultures
-                              let str = c.Equals(TranslatedInstanceLogic.DefaultCulture) ? rc.Value : support.TryGetC(c).TryGetC(rc.Key).Try(a => a.OriginalText == rc.Value ? a.TranslatedText : null)
+                              let str = c.Equals(TranslatedInstanceLogic.DefaultCulture) ? rc.Value : support.TryGetC(c)?.TryGetC(rc.Key)?.Let(a => a.OriginalText == rc.Value ? a.TranslatedText : null)
                               where str.HasText()
                               let old = c.Equals(TranslatedInstanceLogic.DefaultCulture) ? target.TryGetC(rc.Key) : null
                               select new
@@ -474,8 +478,8 @@ namespace Signum.Engine.Translation
                                   Culture = c,
                                   Conflict = new PropertyRouteConflict
                                   {
-                                      OldOriginal = old.Try(o => o.OriginalText),
-                                      OldTranslation = old.Try(o => o.TranslatedText),
+                                      OldOriginal = old?.OriginalText,
+                                      OldTranslation = old?.TranslatedText,
 
                                       Original = str,
                                       AutomaticTranslation = null
@@ -516,7 +520,7 @@ namespace Signum.Engine.Translation
                         Culture = n.Culture.ToCultureInfoEntity(),
                         PropertyRoute = routes.GetOrThrow(n.Key.Route),
                         Instance = n.Key.Instance,
-                        RowId  = n.Key.RowId.TryToString(),
+                        RowId  = n.Key.RowId?.ToString(),
                         OriginalText = n.OriginalText,
                         TranslatedText = n.TranslatedText,
                     }.Save(),

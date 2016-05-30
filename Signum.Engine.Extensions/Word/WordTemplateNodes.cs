@@ -114,16 +114,16 @@ namespace Signum.Engine.Word
             object obj = ValueProvider.GetValue(p);
             string text = obj is Enum ? ((Enum)obj).NiceToString() :
                 obj is IFormattable ? ((IFormattable)obj).ToString(Format ?? ValueProvider.Format, p.Culture) :
-                obj.TryToString();
+                obj?.ToString();
 
-            this.ReplaceBy(new Run(this.RunProperties.TryDo(prop => prop.Remove()), new Text(text)));
+            this.ReplaceBy(new Run(this.RunProperties?.Do(prop => prop.Remove()), new Text(text)));
         }
 
         protected internal override void RenderTemplate(ScopedDictionary<string, ValueProviderBase> variables)
         {
             var str = "@" + this.ValueProvider.ToString(variables, Format.HasText() ? (":" + Format) : null);
 
-            this.ReplaceBy(new Run(this.RunProperties.TryDo(prop => prop.Remove()), new Text(str)));
+            this.ReplaceBy(new Run(this.RunProperties?.Do(prop => prop.Remove()), new Text(str)));
         }
 
         public override void WriteTo(System.Xml.XmlWriter xmlWriter)
@@ -186,14 +186,17 @@ namespace Signum.Engine.Word
 
         protected internal override void RenderNode(WordTemplateParameters p)
         {
-            this.Remove();
+            if (this.Parent is Paragraph && !this.Parent.ChildElements.Any(a => BlockContainerNode.IsImportant (a) && a != this))
+                this.Parent.Remove();
+            else
+                this.Remove();
         }
 
         protected internal override void RenderTemplate(ScopedDictionary<string, ValueProviderBase> variables)
         {
             string str = "@declare" + ValueProvider.ToString(variables, null);
 
-            this.ReplaceBy(new Run(this.RunProperties.TryDo(prop => prop.Remove()), new Text(str)));
+            this.ReplaceBy(new Run(this.RunProperties?.Do(prop => prop.Remove()), new Text(str)));
 
             ValueProvider.Declare(variables);
         }
@@ -201,8 +204,6 @@ namespace Signum.Engine.Word
         public override void Synchronize(SyncronizationContext sc)
         {
             ValueProvider.Synchronize(sc, "@declare");
-
-            ValueProvider.Declare(sc.Variables);
         }
     }
 
@@ -319,7 +320,7 @@ namespace Signum.Engine.Word
             }
         }
 
-        private bool IsImportant(OpenXmlElement c)
+        public static bool IsImportant(OpenXmlElement c)
         {
             if (c is Paragraph)
                 return true;
@@ -333,6 +334,9 @@ namespace Signum.Engine.Word
 
                 return true; 
             }
+
+            if (c is BaseNode)
+                return true;
 
             return false;
         }
@@ -368,6 +372,7 @@ namespace Signum.Engine.Word
         public ForeachNode(ValueProviderBase valueProvider)
         {
             this.ValueProvider = valueProvider;
+            valueProvider.IsForeach = true;
         }
 
         public ForeachNode(ForeachNode original)
@@ -376,7 +381,7 @@ namespace Signum.Engine.Word
             this.ValueProvider = original.ValueProvider;
             this.ForeachToken = original.ForeachToken.CloneNode();
             this.EndForeachToken = original.EndForeachToken.CloneNode();
-            this.ForeachBlock = (BlockNode)original.ForeachBlock.Try(a => a.CloneNode(true));
+            this.ForeachBlock = (BlockNode)original.ForeachBlock?.Let(a => a.CloneNode(true));
         }
 
         public override void FillTokens(List<QueryToken> tokens)
@@ -414,25 +419,19 @@ namespace Signum.Engine.Word
         protected internal override void RenderNode(WordTemplateParameters p)
         {
             var parent = this.Parent;
-            int index = parent.ChildElements.IndexOf(this);
-            parent.RemoveChild(this);
-
-            List<Tuple<BlockNode, IEnumerable<ResultRow>>> tuples = new List<Tuple<BlockNode, IEnumerable<ResultRow>>>();
+            
             this.ValueProvider.Foreach(p, () =>
             {
                 var clone = (BlockNode)this.ForeachBlock.CloneNode(true);
 
-                parent.InsertAt(clone, index++);
+                var index = parent.ChildElements.IndexOf(this);
+                
+                parent.InsertAt(clone, index);
 
-                tuples.Add(Tuple.Create(clone, p.Rows));
+                clone.RenderNode(p);
             });
 
-            var prev = p.Rows;
-            foreach (var tuple in tuples)
-            {
-                using (p.OverrideRows(tuple.Item2))
-                    tuple.Item1.RenderNode(p);
-            }
+            parent.RemoveChild(this);
         }
 
         protected internal override void RenderTemplate(ScopedDictionary<string, ValueProviderBase> variables)
@@ -493,7 +492,7 @@ namespace Signum.Engine.Word
 
         internal OpenXmlElement ReplaceMatchNode(string text)
         {
-            var run = new Run(this.MatchNode.RunProperties.TryDo(prop => prop.Remove()), new Text(text));
+            var run = new Run(this.MatchNode.RunProperties?.Do(prop => prop.Remove()), new Text(text));
             if (this.MatchNode == AscendantNode)
                 return run;
 
@@ -545,8 +544,8 @@ namespace Signum.Engine.Word
             this.NotAnyToken = original.NotAnyToken.CloneNode();
             this.EndAnyToken = original.EndAnyToken.CloneNode();
 
-            this.AnyBlock = (BlockNode)original.AnyBlock.Try(a => a.CloneNode(true));
-            this.NotAnyBlock = (BlockNode)original.NotAnyBlock.Try(a => a.CloneNode(true));
+            this.AnyBlock = (BlockNode)original.AnyBlock?.Let(a => a.CloneNode(true));
+            this.NotAnyBlock = (BlockNode)original.NotAnyBlock?.Let(a => a.CloneNode(true));
         }
 
         public override OpenXmlElement CloneNode(bool deep)
@@ -726,8 +725,8 @@ namespace Signum.Engine.Word
             this.ElseToken = original.ElseToken.CloneNode();
             this.EndIfToken = original.EndIfToken.CloneNode();
 
-            this.IfBlock = (BlockNode)original.IfBlock.Try(a => a.CloneNode(true));
-            this.ElseBlock = (BlockNode)original.ElseBlock.Try(a => a.CloneNode(true));
+            this.IfBlock = (BlockNode)original.IfBlock?.Let(a => a.CloneNode(true));
+            this.ElseBlock = (BlockNode)original.ElseBlock?.Let(a => a.CloneNode(true));
         }
 
         public override OpenXmlElement CloneNode(bool deep)

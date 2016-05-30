@@ -20,6 +20,7 @@ using Signum.Entities.Basics;
 using Signum.Engine.Authorization;
 using Signum.Engine.Excel;
 using Signum.Entities.UserAssets;
+using Signum.Entities.UserQueries;
 
 namespace Signum.Web.Chart
 {
@@ -62,7 +63,7 @@ namespace Signum.Web.Chart
         {
             string lastToken = Request["lastTokenChanged"];
             
-            var request = this.ExtractChartRequestCtx(lastToken.Try(int.Parse)).Value;   
+            var request = this.ExtractChartRequestCtx(lastToken?.Let(int.Parse)).Value;   
 
             ViewData[ViewDataKeys.QueryDescription] = DynamicQueryManager.Current.QueryDescription(request.QueryName);
             
@@ -96,17 +97,12 @@ namespace Signum.Web.Chart
 
             QueryDescription qd = DynamicQueryManager.Current.QueryDescription(request.QueryName);
 
-            object queryName = Finder.ResolveQueryName(webQueryName);
-
             FilterOption fo = new FilterOption(tokenName, null);
-            if (fo.Token == null)
-            {
-                fo.Token = QueryUtils.Parse(tokenName, qd, SubTokensOptions.CanAnyAll | SubTokensOptions.CanElement | (request.GroupResults ? SubTokensOptions.CanAggregate : 0));
-            }
+            fo.Token = QueryUtils.Parse(tokenName, qd, SubTokensOptions.CanAnyAll | SubTokensOptions.CanElement | (request.GroupResults ? SubTokensOptions.CanAggregate : 0));
             fo.Operation = QueryUtils.GetFilterOperations(QueryUtils.GetFilterType(fo.Token.Type)).FirstEx();
 
             return Content(FilterBuilderHelper.NewFilter(
-                    FinderController.CreateHtmlHelper(this), queryName, fo, new Context(null, this.Prefix()), index).ToHtmlString());
+                    FinderController.CreateHtmlHelper(this), fo, new Context(null, this.Prefix()), index).ToHtmlString());
         }
 
         [HttpPost]
@@ -246,7 +242,7 @@ namespace Signum.Web.Chart
             if (lastTokenChanged != null)
             {
                 if (lastTokenChanged == -1)
-                    chart.ChartScript.SyncronizeColumns(chart, changeParameters: true); 
+                    chart.ChartScript.SyncronizeColumns(chart); 
                 else
                     chart.Columns[lastTokenChanged.Value].TokenChanged();
             }
@@ -274,7 +270,7 @@ namespace Signum.Web.Chart
 
             var userChart = request.ToUserChart();
 
-            userChart.Owner = UserEntity.Current.ToLite();
+            userChart.Owner = UserQueryUtils.DefaultOwner();
 
             ViewData[ViewDataKeys.QueryDescription] = DynamicQueryManager.Current.QueryDescription(request.QueryName);
 

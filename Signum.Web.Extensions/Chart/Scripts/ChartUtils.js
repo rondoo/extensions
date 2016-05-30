@@ -1,4 +1,4 @@
-﻿/// <reference path="../../../../Framework/Signum.Web/Signum/Headers/jquery/jquery.d.ts"/>
+/// <reference path="../../../../Framework/Signum.Web/Signum/Headers/jquery/jquery.d.ts"/>
 /// <reference path="../../../../Framework/Signum.Web/Signum/Headers/d3/d3.d.ts"/>
 var ChartUtils;
 (function (ChartUtils) {

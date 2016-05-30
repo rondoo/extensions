@@ -116,14 +116,14 @@ namespace Signum.Web.Selenium
             this.SearchControl = new SearchControlProxy(selenium, "");
         }
 
-        public NormalPage<T> Create<T>() where T : ModifiableEntity
+        public PopupControl<T> Create<T>() where T : ModifiableEntity
         {
             Selenium.FindElement(SearchControl.CreateButtonLocator).Click();
 
-            return new NormalPage<T>(Selenium).WaitLoaded();
+            return new PopupControl<T>(Selenium, "Temp").WaitVisible();
         }
-
-        public NormalPage<T> CreateChoose<T>() where T : ModifiableEntity
+        
+        public PopupControl<T> CreateChoose<T>() where T : ModifiableEntity
         {
             Selenium.FindElement(SearchControl.CreateButtonLocator).Click();
 
@@ -135,7 +135,7 @@ namespace Signum.Web.Selenium
 
             ChooserPopup.ChooseButton(Selenium, SearchControl.Prefix, typeof(T));
 
-            return new NormalPage<T>(Selenium).WaitLoaded();
+            return new PopupControl<T>(Selenium, "Temp").WaitVisible();
         }
 
         public void Dispose()
@@ -344,6 +344,11 @@ namespace Signum.Web.Selenium
         public bool FiltersVisible
         {
             get { return this.Selenium.IsElementVisible(this.FiltersPanelLocator); }
+        }
+
+        public ILineContainer<T> SimpleFilterBuilder<T>() where T : ModifiableEntity
+        {
+            return new LineContainer<T>(this.Selenium, this.Prefix);
         }
     }
 
@@ -643,21 +648,55 @@ namespace Signum.Web.Selenium
             return RowLocator(rowIndex).CombineCss(" > td:nth-child({0}) > a".FormatWith(allowSelection ? 2 : 1));
         }
 
-        public NormalPage<T> EntityClick<T>(Lite<T> lite, bool allowSelection = true) where T : Entity
+
+        public IWebElement EntityLinkButton(Lite<IEntity> lite, bool allowSelection = true)
         {
-            Selenium.FindElement(EntityLinkLocator(lite, allowSelection)).Click();
+            return Selenium.FindElement(EntityLinkLocator(lite, allowSelection));
+        }
+
+        public IWebElement EntityLinkButton(int rowIndex, bool allowSelection = true)
+        {
+            return Selenium.FindElement(EntityLinkLocator(rowIndex, allowSelection));
+        }
+
+        public PopupControl<T> EntityClick<T>(Lite<T> lite, bool allowSelection = true) where T : Entity
+        {
+            EntityLinkButton(lite, allowSelection).Click();
+            return new PopupControl<T>(Selenium, this.PrefixUnderscore + "nav").WaitVisible();
+        }
+
+        public PopupControl<T> EntityClick<T>(int rowIndex, bool allowSelection = true) where T : Entity
+        {
+            EntityLinkButton(rowIndex, allowSelection).Click();
+            return new PopupControl<T>(Selenium, this.PrefixUnderscore + "nav").WaitVisible();
+        }
+
+        public NormalPage<T> EntityClickNormalPage<T>(Lite<T> lite, bool allowSelection = true) where T : Entity
+        {
+            EntityLinkButton(lite, allowSelection).Click();
             return new NormalPage<T>(Selenium).WaitLoaded();
         }
 
-        public NormalPage<T> EntityClick<T>(int rowIndex, bool allowSelection = true) where T : Entity
+        public NormalPage<T> EntityClickNormalPage<T>(int rowIndex, bool allowSelection = true) where T : Entity
         {
-            Selenium.FindElement(EntityLinkLocator(rowIndex, allowSelection)).Click();
+            EntityLinkButton(rowIndex, allowSelection).Click();
             return new NormalPage<T>(Selenium).WaitLoaded();
         }
 
-        public EntityContextMenuProxy EntityContextMenu(int rowIndex)
+        public EntityContextMenuProxy EntityContextMenu(int rowIndex, string columnToken = "Entity")
         {
-            Selenium.FindElement(CellLocator(rowIndex, "Entity")).ContextClick();
+            Selenium.FindElement(CellLocator(rowIndex, columnToken)).ContextClick();
+
+            EntityContextMenuProxy ctx = new EntityContextMenuProxy(this, isContext: true);
+
+            ctx.WaitNotLoading();
+
+            return ctx;
+        }
+
+        public EntityContextMenuProxy EntityContextMenu(Lite<Entity> lite, string columnToken = "Entity")
+        {
+            Selenium.FindElement(CellLocator(lite, columnToken)).ContextClick();
 
             EntityContextMenuProxy ctx = new EntityContextMenuProxy(this, isContext: true);
 
@@ -728,6 +767,11 @@ namespace Signum.Web.Selenium
 
             Selenium.Wait(() => Selenium.FindElement(headerSelector).FindElements(By.CssSelector("span")).Any(s => s.Text == newName));
         }
+
+        public void WaitActiveSuccess()
+        {
+            Selenium.WaitElementVisible(RowsLocator.CombineCss(".active.sf-entity-ctxmenu-success"));
+        }
     }
 
     public class EntityContextMenuProxy
@@ -776,7 +820,7 @@ namespace Signum.Web.Selenium
             if (consumeConfirmation)
                 this.resultTable.Selenium.ConsumeAlert();
 
-            resultTable.Selenium.WaitElementNotVisible(EntityContextMenuLocator);
+            resultTable.WaitActiveSuccess();
         }
 
         public void DeleteClick(IOperationSymbolContainer symbolContainer, bool consumeConfirmation = true)
@@ -789,6 +833,8 @@ namespace Signum.Web.Selenium
             MenuClick(operationSymbol.KeyWeb());
             if (consumeConfirmation)
                 this.resultTable.Selenium.ConsumeAlert();
+
+            resultTable.WaitActiveSuccess();
         }
 
         public PopupControl<ProcessEntity> DeleteProcessClick(IOperationSymbolContainer symbolContainer)
@@ -860,8 +906,8 @@ namespace Signum.Web.Selenium
         public void WaitNotLoading()
         {
             this.resultTable.Selenium.Wait(() =>
-                this.resultTable.Selenium.FindElement(this.EntityContextMenuLocator)
-                    .FindElements(By.CssSelector("li")).Any(a => !a.FindElements(By.CssSelector(".sf-tm-selected-loading")).Any()));
+               !this.resultTable.Selenium.FindElement(this.EntityContextMenuLocator)
+                    .FindElements(By.CssSelector("li.sf-tm-selected-loading")).Any());
         }
     }
 

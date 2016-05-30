@@ -34,7 +34,7 @@ namespace Signum.Engine.UserQueries
 
                 PermissionAuthLogic.RegisterPermissions(UserQueryPermission.ViewUserQuery);
 
-                UserAssetsImporter.UserAssetNames.Add("UserQuery", typeof(UserQueryEntity));
+                UserAssetsImporter.RegisterName<UserQueryEntity>("UserQuery");
 
                 sb.Schema.Synchronizing += Schema_Synchronizing;
 
@@ -75,6 +75,48 @@ namespace Signum.Engine.UserQueries
                 UserQueriesByType = sb.GlobalLazy(() => UserQueries.Value.Values.Where(a => a.EntityType != null).GroupToDictionary(a => TypeLogic.IdToType.GetOrThrow(a.EntityType.Id), a => a.ToLite()),
                     new InvalidateWith(typeof(UserQueryEntity)));
             }
+        }
+
+        public static QueryRequest ToQueryRequest(this UserQueryEntity userQuery)
+        {
+            var qr = new QueryRequest();
+
+            qr.QueryName = userQuery.Query.ToQueryName();
+
+            if (!userQuery.WithoutFilters)
+            {
+                qr.Filters = userQuery.Filters.Select(qf => 
+                    new Filter(qf.Token.Token, qf.Operation, FilterValueConverter.Parse(qf.ValueString, qf.Token.Token.Type, qf.Operation == FilterOperation.IsIn))).ToList();
+            }
+
+            qr.Columns = MergeColumns(userQuery);
+            qr.Orders = userQuery.Orders.Select(qo => new Order(qo.Token.Token, qo.OrderType)).ToList();
+
+            qr.Pagination = userQuery.GetPagination() ?? new Pagination.All();
+
+            return qr;
+        }
+
+        static List<Column> MergeColumns(UserQueryEntity uq)
+        {
+            QueryDescription qd = DynamicQueryManager.Current.QueryDescription(uq.Query.ToQueryName());
+
+            switch (uq.ColumnsMode)
+            {
+                case ColumnOptionsMode.Add:
+                    return qd.Columns.Where(cd => !cd.IsEntity).Select(cd => new Column(cd, qd.QueryName)).Concat(uq.Columns.Select(co => ToColumn(co))).ToList();
+                case ColumnOptionsMode.Remove:
+                    return qd.Columns.Where(cd => !cd.IsEntity && !uq.Columns.Any(co => co.Token.TokenString == cd.Name)).Select(cd => new Column(cd, qd.QueryName)).ToList();
+                case ColumnOptionsMode.Replace:
+                    return uq.Columns.Select(co => ToColumn(co)).ToList();
+                default:
+                    throw new InvalidOperationException("{0} is not a valid ColumnOptionMode".FormatWith(uq.ColumnsMode));
+            }
+        }
+
+        private static Column ToColumn(QueryColumnEntity co)
+        {
+            return new Column(co.Token.Token, co.DisplayName.DefaultText(co.Token.Token.NiceName()));
         }
 
         public static UserQueryEntity ParseAndSave(this UserQueryEntity userQuery)
@@ -191,7 +233,7 @@ namespace Signum.Engine.UserQueries
                         foreach (var item in uq.Filters.ToList())
                         {
                             QueryTokenEntity token = item.Token;
-                            switch (QueryTokenSynchronizer.FixToken(replacements, ref token, qd, SubTokensOptions.CanAnyAll | SubTokensOptions.CanElement, "{0} {1}".FormatWith(item.Operation, item.ValueString)))
+                            switch (QueryTokenSynchronizer.FixToken(replacements, ref token, qd, SubTokensOptions.CanAnyAll | SubTokensOptions.CanElement, "{0} {1}".FormatWith(item.Operation, item.ValueString), allowRemoveToken: true, allowReCreate: false))
                             {
                                 case FixTokenResult.Nothing: break;
                                 case FixTokenResult.DeleteEntity: return table.DeleteSqlSync(uq);
@@ -209,7 +251,7 @@ namespace Signum.Engine.UserQueries
                         foreach (var item in uq.Columns.ToList())
                         {
                             QueryTokenEntity token = item.Token;
-                            switch (QueryTokenSynchronizer.FixToken(replacements, ref token, qd, SubTokensOptions.CanElement, item.DisplayName.HasText() ? "'{0}'".FormatWith(item.DisplayName) : null))
+                            switch (QueryTokenSynchronizer.FixToken(replacements, ref token, qd, SubTokensOptions.CanElement, item.DisplayName.HasText() ? "'{0}'".FormatWith(item.DisplayName) : null, allowRemoveToken: true, allowReCreate: false))
                             {
                                 case FixTokenResult.Nothing: break;
                                 case FixTokenResult.DeleteEntity: ; return table.DeleteSqlSync(uq);
@@ -227,7 +269,7 @@ namespace Signum.Engine.UserQueries
                         foreach (var item in uq.Orders.ToList())
                         {
                             QueryTokenEntity token = item.Token;
-                            switch (QueryTokenSynchronizer.FixToken(replacements, ref token, qd, SubTokensOptions.CanElement, item.OrderType.ToString()))
+                            switch (QueryTokenSynchronizer.FixToken(replacements, ref token, qd, SubTokensOptions.CanElement, item.OrderType.ToString(), allowRemoveToken: true, allowReCreate: false))
                             {
                                 case FixTokenResult.Nothing: break;
                                 case FixTokenResult.DeleteEntity: return table.DeleteSqlSync(uq);
